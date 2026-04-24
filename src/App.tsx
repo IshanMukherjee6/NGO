@@ -5,6 +5,10 @@ import Navbar from "./components/Navbar"
 import About from "./pages/About"
 import { Button } from "@/components/ui/button"
 
+import Register from "./pages/Register"
+import RegisterNGO from "./pages/RegisterNGO"
+import RegisterWorker from "./pages/RegisterWorker"
+
 const slides = [
   {
     image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80",
@@ -108,6 +112,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/register/ngo" element={<RegisterNGO />} />
+        <Route path="/register/worker" element={<RegisterWorker />} />
       </Routes>
     </div>
   )
