@@ -9,6 +9,7 @@ import Register from "./pages/Register"
 import RegisterNGO from "./pages/RegisterNGO"
 import RegisterWorker from "./pages/RegisterWorker"
 
+import Login from "./pages/Login"
 const slides = [
   {
     image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80",
@@ -115,6 +116,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/register/ngo" element={<RegisterNGO />} />
         <Route path="/register/worker" element={<RegisterWorker />} />
+        <Route path="/login" element={<Login />} />
       </Routes>
     </div>
   )

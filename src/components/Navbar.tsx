@@ -43,7 +43,7 @@ export default function Navbar() {
 
             {/* Desktop actions */}
             <div className="hidden md:flex items-center gap-2">
-                <Button variant="ghost" className="text-white/75 hover:text-white hover:bg-white/10 text-base font-medium px-5 h-10">
+                <Button variant="ghost" onClick={() => navigate("/login")} className="text-white/75 hover:text-white hover:bg-white/10 text-base font-medium px-5 h-10">
                     Log in
                 </Button>
                 <Button
