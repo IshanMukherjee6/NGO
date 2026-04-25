@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, useNavigate } from "react-router-dom"
 
 import Navbar from "./components/Navbar"
 import About from "./pages/About"
@@ -10,6 +10,9 @@ import RegisterNGO from "./pages/RegisterNGO"
 import RegisterWorker from "./pages/RegisterWorker"
 
 import Login from "./pages/Login"
+
+import Dashboard from "./pages/Dashboard"
+
 const slides = [
   {
     image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80",
@@ -31,6 +34,7 @@ const slides = [
 function Home() {
   const [current, setCurrent] = useState(0)
   const [visible, setVisible] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -91,8 +95,8 @@ function Home() {
           <p className="text-white/70 mb-8">{slide.sub}</p>
 
           <div className="flex gap-3">
-            <Button>Join as Worker</Button>
-            <Button variant="outline">Register NGO</Button>
+            <Button onClick={() => navigate("/register/worker")}>Join as Worker</Button>
+            <Button variant="outline" onClick={() => navigate("/register/ngo")}>Register NGO</Button>
           </div>
         </div>
       </section>
@@ -103,6 +107,7 @@ function Home() {
       </footer>
     </div>
   )
+
 }
 
 export default function App() {
@@ -117,6 +122,7 @@ export default function App() {
         <Route path="/register/ngo" element={<RegisterNGO />} />
         <Route path="/register/worker" element={<RegisterWorker />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </div>
   )
