@@ -77,7 +77,7 @@ export default function Login() {
             }
             // Temporary: navigate to NGO dashboard
             // Backend will determine the correct redirect based on user role
-            navigate("/dashboard/ngo")
+            navigate("/dashboard")
         }, 1500)
     }
 

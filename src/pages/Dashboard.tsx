@@ -103,6 +103,11 @@ const fakeCompletedJobs = [
     },
 ]
 
+// ─── Shared input classes ─────────────────────────────────────────────────────
+
+const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+const selectCls = `${inputCls} appearance-none cursor-pointer`
+
 // ─── Post Job Modal ───────────────────────────────────────────────────────────
 
 function PostJobModal({ onClose }: { onClose: () => void }) {
@@ -123,15 +128,15 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
 
                 {/* Header */}
-                <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
+                <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-border flex-shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900">Post a New Job</h2>
-                        <p className="text-sm text-gray-500 mt-0.5">Fill in the job details below</p>
+                        <h2 className="text-xl font-bold text-foreground">Post a New Job</h2>
+                        <p className="text-sm text-muted-foreground mt-0.5">Fill in the job details below</p>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all">
+                    <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                         <X size={18} />
                     </button>
                 </div>
@@ -140,13 +145,13 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
                 <div className="overflow-y-auto flex-1 px-7 py-6">
                     {submitted ? (
                         <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
-                            <div className="w-16 h-16 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center">
-                                <CheckCircle size={28} className="text-green-600" />
+                            <div className="w-16 h-16 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center">
+                                <CheckCircle size={28} className="text-green-500" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900">Job Posted!</h3>
-                                <p className="text-sm text-gray-500 mt-1">
-                                    <span className="font-semibold text-gray-700">{form.title}</span> has been posted successfully and is now visible to workers.
+                                <h3 className="text-lg font-bold text-foreground">Job Posted!</h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    <span className="font-semibold text-foreground">{form.title}</span> is now visible to workers.
                                 </p>
                             </div>
                             <Button onClick={onClose} className="rounded-full px-8 mt-2">Done</Button>
@@ -154,19 +159,15 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
                     ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-                            {/* Job Title */}
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-700">Job Title <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-medium text-foreground">Job Title <span className="text-red-500">*</span></label>
                                 <input name="title" value={form.title} onChange={set} required
-                                    placeholder="e.g. Field Survey Associate"
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all" />
+                                    placeholder="e.g. Field Survey Associate" className={inputCls} />
                             </div>
 
-                            {/* Department */}
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-700">Department <span className="text-red-500">*</span></label>
-                                <select name="department" value={form.department} onChange={set} required
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all appearance-none">
+                                <label className="text-sm font-medium text-foreground">Department <span className="text-red-500">*</span></label>
+                                <select name="department" value={form.department} onChange={set} required className={selectCls}>
                                     <option value="">Select Department</option>
                                     {["Operations", "Health", "Training", "Admin", "Finance", "Research"].map(d => (
                                         <option key={d} value={d}>{d}</option>
@@ -174,28 +175,23 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
                                 </select>
                             </div>
 
-                            {/* Positions + Salary */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-gray-700">No. of Positions <span className="text-red-500">*</span></label>
+                                    <label className="text-sm font-medium text-foreground">No. of Positions <span className="text-red-500">*</span></label>
                                     <input name="positions" type="number" value={form.positions} onChange={set} required
-                                        placeholder="e.g. 20"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all" />
+                                        placeholder="e.g. 20" className={inputCls} />
                                 </div>
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-gray-700">Expected Salary <span className="text-red-500">*</span></label>
+                                    <label className="text-sm font-medium text-foreground">Expected Salary <span className="text-red-500">*</span></label>
                                     <input name="salary" value={form.salary} onChange={set} required
-                                        placeholder="e.g. ₹18,000/month"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all" />
+                                        placeholder="e.g. ₹18,000/month" className={inputCls} />
                                 </div>
                             </div>
 
-                            {/* Education + Experience */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-gray-700">Education <span className="text-red-500">*</span></label>
-                                    <select name="education" value={form.education} onChange={set} required
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all appearance-none">
+                                    <label className="text-sm font-medium text-foreground">Education <span className="text-red-500">*</span></label>
+                                    <select name="education" value={form.education} onChange={set} required className={selectCls}>
                                         <option value="">Select</option>
                                         {["8th Pass", "10th Pass", "12th Pass", "Graduate", "Post Graduate"].map(e => (
                                             <option key={e} value={e}>{e}</option>
@@ -203,9 +199,8 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
                                     </select>
                                 </div>
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-gray-700">Experience <span className="text-red-500">*</span></label>
-                                    <select name="experience" value={form.experience} onChange={set} required
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all appearance-none">
+                                    <label className="text-sm font-medium text-foreground">Experience <span className="text-red-500">*</span></label>
+                                    <select name="experience" value={form.experience} onChange={set} required className={selectCls}>
                                         <option value="">Select</option>
                                         {["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"].map(e => (
                                             <option key={e} value={e}>{e}</option>
@@ -214,11 +209,9 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
                                 </div>
                             </div>
 
-                            {/* Duration */}
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-700">Duration <span className="text-red-500">*</span></label>
-                                <select name="duration" value={form.duration} onChange={set} required
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all appearance-none">
+                                <label className="text-sm font-medium text-foreground">Duration <span className="text-red-500">*</span></label>
+                                <select name="duration" value={form.duration} onChange={set} required className={selectCls}>
                                     <option value="">Select Duration</option>
                                     {["1 month", "2 months", "3 months", "6 months", "1 year", "Ongoing"].map(d => (
                                         <option key={d} value={d}>{d}</option>
@@ -253,13 +246,14 @@ function UploadProofModal({ onClose }: { onClose: () => void }) {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
-                <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-gray-100">
+            <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+
+                <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-border">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900">Upload Proof of Work</h2>
-                        <p className="text-sm text-gray-500 mt-0.5">Submit evidence of your completed work</p>
+                        <h2 className="text-xl font-bold text-foreground">Upload Proof of Work</h2>
+                        <p className="text-sm text-muted-foreground mt-0.5">Submit evidence of your completed work</p>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all">
+                    <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                         <X size={18} />
                     </button>
                 </div>
@@ -267,38 +261,36 @@ function UploadProofModal({ onClose }: { onClose: () => void }) {
                 <div className="px-7 py-6">
                     {submitted ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center gap-4">
-                            <div className="w-16 h-16 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center">
-                                <CheckCircle size={28} className="text-green-600" />
+                            <div className="w-16 h-16 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center">
+                                <CheckCircle size={28} className="text-green-500" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900">Proof Submitted!</h3>
-                                <p className="text-sm text-gray-500 mt-1">The NGO will review your proof and process payment accordingly.</p>
+                                <h3 className="text-lg font-bold text-foreground">Proof Submitted!</h3>
+                                <p className="text-sm text-muted-foreground mt-1">The NGO will review your proof and process payment.</p>
                             </div>
                             <Button onClick={onClose} className="rounded-full px-8 mt-2">Done</Button>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                            {/* File upload */}
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-700">Upload File <span className="text-red-500">*</span></label>
-                                <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-8 cursor-pointer transition-all ${file ? "border-black bg-gray-50" : "border-gray-200 hover:border-gray-400"
+                                <label className="text-sm font-medium text-foreground">Upload File <span className="text-red-500">*</span></label>
+                                <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-8 cursor-pointer transition-all ${file ? "border-foreground bg-muted/20" : "border-border hover:border-muted-foreground"
                                     }`}>
-                                    <Upload size={24} className={file ? "text-black" : "text-gray-400"} />
-                                    <span className="text-sm text-gray-500">
+                                    <Upload size={24} className={file ? "text-foreground" : "text-muted-foreground"} />
+                                    <span className="text-sm text-muted-foreground">
                                         {file ? file.name : "Click to upload photo or document"}
                                     </span>
-                                    <span className="text-xs text-gray-400">JPG, PNG, PDF up to 10MB</span>
+                                    <span className="text-xs text-muted-foreground/60">JPG, PNG, PDF up to 10MB</span>
                                     <input type="file" className="hidden" accept="image/*,.pdf"
                                         onChange={e => setFile(e.target.files?.[0] || null)} />
                                 </label>
                             </div>
 
-                            {/* Note */}
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-700">Note (optional)</label>
+                                <label className="text-sm font-medium text-foreground">Note (optional)</label>
                                 <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
                                     placeholder="Describe what work was done..."
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-all resize-none" />
+                                    className={`${inputCls} resize-none`} />
                             </div>
 
                             <Button type="submit" disabled={!file} className="rounded-full h-11 font-semibold mt-1">
@@ -354,15 +346,13 @@ function NGODashboard() {
                 <div className="flex flex-col gap-4">
                     {fakePostedJobs.map(job => (
                         <div key={job.id} className="bg-card border border-border rounded-2xl overflow-hidden">
-
-                            {/* Job header */}
                             <div className="p-5 flex items-center justify-between gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <h3 className="font-semibold text-foreground">{job.title}</h3>
-                                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${job.status === "active"
-                                            ? "bg-green-50 text-green-700 border border-green-200"
-                                            : "bg-gray-100 text-gray-500 border border-gray-200"
+                                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${job.status === "active"
+                                            ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                            : "bg-muted text-muted-foreground border-border"
                                             }`}>
                                             {job.status === "active" ? "Active" : "Closed"}
                                         </span>
@@ -383,7 +373,6 @@ function NGODashboard() {
                                 </button>
                             </div>
 
-                            {/* Workers list */}
                             {expandedJob === job.id && (
                                 <div className="border-t border-border bg-muted/20 px-5 py-4">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Workers Assigned</p>
@@ -466,11 +455,9 @@ function WorkerDashboard() {
             <div className="flex gap-3 mb-5 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
                     <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                        value={search} onChange={e => setSearch(e.target.value)}
+                    <input value={search} onChange={e => setSearch(e.target.value)}
                         placeholder="Search jobs by title or department..."
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-                    />
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all" />
                 </div>
                 <Button variant="outline" onClick={() => setShowFilters(!showFilters)}
                     className={`rounded-xl gap-2 font-medium ${showFilters ? "border-foreground" : ""}`}>
@@ -487,13 +474,11 @@ function WorkerDashboard() {
                     <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min. Salary (₹)</label>
                         <input name="minSalary" type="number" value={filters.minSalary} onChange={setFilter}
-                            placeholder="e.g. 15000"
-                            className="px-3.5 py-2 rounded-xl border border-border bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all" />
+                            placeholder="e.g. 15000" className={inputCls} />
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Experience</label>
-                        <select name="experience" value={filters.experience} onChange={setFilter}
-                            className="px-3.5 py-2 rounded-xl border border-border bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all appearance-none">
+                        <select name="experience" value={filters.experience} onChange={setFilter} className={selectCls}>
                             <option value="">Any</option>
                             {["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"].map(e => (
                                 <option key={e} value={e}>{e}</option>
@@ -531,7 +516,7 @@ function WorkerDashboard() {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 flex-wrap mb-1">
                                         <h3 className="font-semibold text-foreground">{job.title}</h3>
-                                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
+                                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 font-medium">
                                             {job.positions} open
                                         </span>
                                     </div>
@@ -547,9 +532,7 @@ function WorkerDashboard() {
                                         <span className="text-xs bg-muted px-2.5 py-1 rounded-lg text-muted-foreground">{job.experience}</span>
                                     </div>
                                 </div>
-                                <Button size="sm" className="rounded-full px-5 flex-shrink-0 font-semibold">
-                                    Apply
-                                </Button>
+                                <Button size="sm" className="rounded-full px-5 flex-shrink-0 font-semibold">Apply</Button>
                             </div>
                         </div>
                     ))}
@@ -560,31 +543,32 @@ function WorkerDashboard() {
             {showCompleted && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowCompleted(false)} />
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
-                        <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
+                    <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-border flex-shrink-0">
                             <div>
-                                <h2 className="text-xl font-bold text-gray-900">My Jobs</h2>
-                                <p className="text-sm text-gray-500 mt-0.5">Current and completed jobs</p>
+                                <h2 className="text-xl font-bold text-foreground">My Jobs</h2>
+                                <p className="text-sm text-muted-foreground mt-0.5">Current and completed jobs</p>
                             </div>
-                            <button onClick={() => setShowCompleted(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all">
+                            <button onClick={() => setShowCompleted(false)}
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                                 <X size={18} />
                             </button>
                         </div>
                         <div className="overflow-y-auto flex-1 px-7 py-6 flex flex-col gap-4">
                             {fakeCompletedJobs.map(job => (
-                                <div key={job.id} className={`rounded-2xl border p-5 ${job.status === "current" ? "border-black bg-gray-50" : "border-gray-200"
+                                <div key={job.id} className={`rounded-2xl border p-5 ${job.status === "current" ? "border-foreground bg-muted/20" : "border-border bg-card"
                                     }`}>
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="font-semibold text-gray-900">{job.title}</h3>
+                                        <h3 className="font-semibold text-foreground">{job.title}</h3>
                                         <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${job.status === "current"
-                                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                                            : "bg-green-50 text-green-700 border-green-200"
+                                            ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                            : "bg-green-500/10 text-green-500 border-green-500/20"
                                             }`}>
                                             {job.status === "current" ? "In Progress" : "Completed"}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-gray-500 mb-3">{job.ngo}</p>
-                                    <div className="flex gap-4 text-xs text-gray-500 flex-wrap">
+                                    <p className="text-sm text-muted-foreground mb-3">{job.ngo}</p>
+                                    <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
                                         <span className="flex items-center gap-1"><Clock size={11} />{job.duration}</span>
                                         <span className="flex items-center gap-1"><DollarSign size={11} />Earned: {job.earned}</span>
                                         <span className="flex items-center gap-1"><CheckCircle size={11} />{job.completedOn}</span>
@@ -604,14 +588,14 @@ function WorkerDashboard() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-    // TODO: replace this toggle with real role from JWT token
+    // TODO: replace with real role from JWT token when backend is ready
     // const role = getUserRoleFromToken()  →  "ngo" | "worker"
     const [role, setRole] = useState<"ngo" | "worker">("ngo")
 
     return (
         <div className="min-h-screen bg-background pt-24">
 
-            {/* Temporary role switcher — remove when backend is ready */}
+            {/* Temp role switcher — delete when backend is ready */}
             <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-foreground text-background rounded-full px-4 py-2 shadow-lg text-xs font-semibold">
                 <span className="text-background/60">View as:</span>
                 <button onClick={() => setRole("ngo")}
