@@ -1,9 +1,16 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { ChevronRight, Check, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react"
 
-// ─── Reusable field components ────────────────────────────────────────────────
+// ─── Field ────────────────────────────────────────────────────────────────────
 
 function Field({
     label, name, type = "text", value, onChange, placeholder, required = true,
@@ -35,29 +42,6 @@ function Field({
                     </button>
                 )}
             </div>
-        </div>
-    )
-}
-
-function SelectField({
-    label, name, value, onChange, options, required = true,
-}: {
-    label: string; name: string; value: string
-    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
-    options: string[]; required?: boolean
-}) {
-    return (
-        <div className="flex flex-col gap-1.5">
-            <label htmlFor={name} className="text-sm font-medium text-foreground">
-                {label} {required && <span className="text-red-500">*</span>}
-            </label>
-            <select
-                id={name} name={name} value={value} onChange={onChange} required={required}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all appearance-none cursor-pointer"
-            >
-                <option value="">Select {label}</option>
-                {options.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
         </div>
     )
 }
@@ -113,30 +97,22 @@ export default function RegisterWorker() {
         username: "", password: "", confirmPassword: "",
     })
 
-    const set = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    const set = (e: React.ChangeEvent<HTMLInputElement>) =>
         setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
     const handleStep1 = (e: React.FormEvent) => {
         e.preventDefault()
+        if (!form.state) { alert("Please select a state."); return }
         setStep(2)
     }
 
     const handleStep2 = (e: React.FormEvent) => {
         e.preventDefault()
-        if (form.password !== form.confirmPassword) {
-            alert("Passwords do not match.")
-            return
-        }
-        if (form.password.length < 8) {
-            alert("Password must be at least 8 characters.")
-            return
-        }
+        if (form.password !== form.confirmPassword) { alert("Passwords do not match."); return }
+        if (form.password.length < 8) { alert("Password must be at least 8 characters."); return }
         setLoading(true)
         // TODO: replace with real API call
-        setTimeout(() => {
-            setLoading(false)
-            setStep(3)
-        }, 1500)
+        setTimeout(() => { setLoading(false); setStep(3) }, 1500)
     }
 
     // ── Success screen ──
@@ -144,8 +120,8 @@ export default function RegisterWorker() {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center px-4 pt-24 pb-12">
                 <div className="w-full max-w-md text-center flex flex-col items-center gap-5">
-                    <div className="w-20 h-20 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center">
-                        <Check size={32} className="text-green-600" />
+                    <div className="w-20 h-20 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center">
+                        <Check size={32} className="text-green-500" />
                     </div>
                     <div>
                         <h2 className="text-2xl font-bold text-foreground">Account Created!</h2>
@@ -175,7 +151,8 @@ export default function RegisterWorker() {
                     onClick={() => step === 1 ? navigate("/register") : setStep(1)}
                     className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
                 >
-                    <ArrowLeft size={15} /> {step === 1 ? "Back to register" : "Back to personal details"}
+                    <ArrowLeft size={15} />
+                    {step === 1 ? "Back to register" : "Back to personal details"}
                 </button>
 
                 {/* Title */}
@@ -186,10 +163,9 @@ export default function RegisterWorker() {
                     </p>
                 </div>
 
-                {/* Step indicator */}
                 <StepIndicator current={step} steps={["Personal Details", "Account Setup"]} />
 
-                {/* ── Step 1: Personal details ── */}
+                {/* ── Step 1 ── */}
                 {step === 1 && (
                     <form onSubmit={handleStep1} className="flex flex-col gap-5">
                         <div className="grid grid-cols-2 gap-4">
@@ -198,21 +174,40 @@ export default function RegisterWorker() {
                             <Field label="Age" name="age" type="number" value={form.age} onChange={set}
                                 placeholder="e.g. 28" />
                         </div>
+
                         <Field label="Phone Number" name="phone" type="tel" value={form.phone} onChange={set}
                             placeholder="+91 98765 43210" />
                         <Field label="PAN Number" name="panNumber" value={form.panNumber} onChange={set}
                             placeholder="ABCDE1234F" />
 
-                        {/* Location section */}
+                        {/* Location */}
                         <div>
                             <p className="text-sm font-semibold text-foreground mb-3">Home Location</p>
                             <div className="flex flex-col gap-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <Field label="Country" name="country" value={form.country} onChange={set}
                                         placeholder="India" />
-                                    <SelectField label="State" name="state" value={form.state} onChange={set}
-                                        options={INDIAN_STATES} />
+
+                                    {/* shadcn Select for State */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-sm font-medium text-foreground">
+                                            State <span className="text-red-500">*</span>
+                                        </label>
+                                        <Select value={form.state} onValueChange={v => setForm(prev => ({ ...prev, state: v }))}>
+                                            <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-[42px] focus:ring-ring">
+                                                <SelectValue placeholder="Select State" />
+                                            </SelectTrigger>
+                                            <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground max-h-60">
+                                                {INDIAN_STATES.map(s => (
+                                                    <SelectItem key={s} value={s} className="rounded-lg text-sm cursor-pointer focus:bg-accent focus:text-accent-foreground">
+                                                        {s}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <Field label="City" name="city" value={form.city} onChange={set}
                                         placeholder="Your city" />
@@ -228,7 +223,7 @@ export default function RegisterWorker() {
                     </form>
                 )}
 
-                {/* ── Step 2: Account credentials ── */}
+                {/* ── Step 2 ── */}
                 {step === 2 && (
                     <form onSubmit={handleStep2} className="flex flex-col gap-5">
                         <Field label="Username" name="username" value={form.username} onChange={set}

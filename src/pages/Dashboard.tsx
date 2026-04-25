@@ -1,6 +1,13 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
     Briefcase, Plus, Users, FileCheck, Upload,
     Filter, ChevronDown, X, Phone, Mail,
     MapPin, Clock, DollarSign, Building2, CheckCircle,
@@ -103,10 +110,53 @@ const fakeCompletedJobs = [
     },
 ]
 
-// ─── Shared input classes ─────────────────────────────────────────────────────
+// ─── Shared input class ───────────────────────────────────────────────────────
 
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-const selectCls = `${inputCls} appearance-none cursor-pointer`
+
+// ─── Reusable label ───────────────────────────────────────────────────────────
+
+function Label({ children }: { children: React.ReactNode }) {
+    return (
+        <label className="text-sm font-medium text-foreground">
+            {children} <span className="text-red-500">*</span>
+        </label>
+    )
+}
+
+// ─── Reusable shadcn Select field ─────────────────────────────────────────────
+
+function SelectField({
+    label, value, onValueChange, placeholder, options,
+}: {
+    label: string
+    value: string
+    onValueChange: (val: string) => void
+    placeholder: string
+    options: string[]
+}) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <Label>{label}</Label>
+            <Select value={value} onValueChange={onValueChange}>
+                <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10 focus:ring-ring">
+                    <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground">
+                    {options.map(o => (
+                        <SelectItem
+                            key={o}
+                            value={o}
+                            className="rounded-lg text-sm cursor-pointer focus:bg-accent focus:text-accent-foreground"
+                        >
+                            {o}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+    )
+}
 
 // ─── Post Job Modal ───────────────────────────────────────────────────────────
 
@@ -117,18 +167,22 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
     })
     const [submitted, setSubmitted] = useState(false)
 
-    const set = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-        setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+    const setField = (name: string, value: string) =>
+        setForm(prev => ({ ...prev, [name]: value }))
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
+        if (!form.department || !form.education || !form.experience || !form.duration) {
+            alert("Please fill in all required fields.")
+            return
+        }
         setSubmitted(true)
     }
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-visible">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-border flex-shrink-0">
@@ -159,65 +213,75 @@ function PostJobModal({ onClose }: { onClose: () => void }) {
                     ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
+                            {/* Job Title */}
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-foreground">Job Title <span className="text-red-500">*</span></label>
-                                <input name="title" value={form.title} onChange={set} required
-                                    placeholder="e.g. Field Survey Associate" className={inputCls} />
+                                <Label>Job Title</Label>
+                                <input
+                                    value={form.title}
+                                    onChange={e => setField("title", e.target.value)}
+                                    required placeholder="e.g. Field Survey Associate"
+                                    className={inputCls}
+                                />
                             </div>
 
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-foreground">Department <span className="text-red-500">*</span></label>
-                                <select name="department" value={form.department} onChange={set} required className={selectCls}>
-                                    <option value="">Select Department</option>
-                                    {["Operations", "Health", "Training", "Admin", "Finance", "Research"].map(d => (
-                                        <option key={d} value={d}>{d}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {/* Department */}
+                            <SelectField
+                                label="Department"
+                                value={form.department}
+                                onValueChange={v => setField("department", v)}
+                                placeholder="Select Department"
+                                options={["Operations", "Health", "Training", "Admin", "Finance", "Research"]}
+                            />
 
+                            {/* Positions + Salary */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-foreground">No. of Positions <span className="text-red-500">*</span></label>
-                                    <input name="positions" type="number" value={form.positions} onChange={set} required
-                                        placeholder="e.g. 20" className={inputCls} />
+                                    <Label>No. of Positions</Label>
+                                    <input
+                                        type="number" min="1"
+                                        value={form.positions}
+                                        onChange={e => setField("positions", e.target.value)}
+                                        required placeholder="e.g. 20"
+                                        className={inputCls}
+                                    />
                                 </div>
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-foreground">Expected Salary <span className="text-red-500">*</span></label>
-                                    <input name="salary" value={form.salary} onChange={set} required
-                                        placeholder="e.g. ₹18,000/month" className={inputCls} />
+                                    <Label>Expected Salary</Label>
+                                    <input
+                                        value={form.salary}
+                                        onChange={e => setField("salary", e.target.value)}
+                                        required placeholder="e.g. ₹18,000/month"
+                                        className={inputCls}
+                                    />
                                 </div>
                             </div>
 
+                            {/* Education + Experience */}
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-foreground">Education <span className="text-red-500">*</span></label>
-                                    <select name="education" value={form.education} onChange={set} required className={selectCls}>
-                                        <option value="">Select</option>
-                                        {["8th Pass", "10th Pass", "12th Pass", "Graduate", "Post Graduate"].map(e => (
-                                            <option key={e} value={e}>{e}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-foreground">Experience <span className="text-red-500">*</span></label>
-                                    <select name="experience" value={form.experience} onChange={set} required className={selectCls}>
-                                        <option value="">Select</option>
-                                        {["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"].map(e => (
-                                            <option key={e} value={e}>{e}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <SelectField
+                                    label="Education"
+                                    value={form.education}
+                                    onValueChange={v => setField("education", v)}
+                                    placeholder="Select"
+                                    options={["8th Pass", "10th Pass", "12th Pass", "Graduate", "Post Graduate"]}
+                                />
+                                <SelectField
+                                    label="Experience"
+                                    value={form.experience}
+                                    onValueChange={v => setField("experience", v)}
+                                    placeholder="Select"
+                                    options={["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"]}
+                                />
                             </div>
 
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-foreground">Duration <span className="text-red-500">*</span></label>
-                                <select name="duration" value={form.duration} onChange={set} required className={selectCls}>
-                                    <option value="">Select Duration</option>
-                                    {["1 month", "2 months", "3 months", "6 months", "1 year", "Ongoing"].map(d => (
-                                        <option key={d} value={d}>{d}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {/* Duration */}
+                            <SelectField
+                                label="Duration"
+                                value={form.duration}
+                                onValueChange={v => setField("duration", v)}
+                                placeholder="Select Duration"
+                                options={["1 month", "2 months", "3 months", "6 months", "1 year", "Ongoing"]}
+                            />
 
                             <Button type="submit" className="rounded-full h-11 font-semibold mt-2">
                                 Post Job
@@ -247,7 +311,6 @@ function UploadProofModal({ onClose }: { onClose: () => void }) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
-
                 <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-border">
                     <div>
                         <h2 className="text-xl font-bold text-foreground">Upload Proof of Work</h2>
@@ -257,7 +320,6 @@ function UploadProofModal({ onClose }: { onClose: () => void }) {
                         <X size={18} />
                     </button>
                 </div>
-
                 <div className="px-7 py-6">
                     {submitted ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center gap-4">
@@ -273,7 +335,9 @@ function UploadProofModal({ onClose }: { onClose: () => void }) {
                     ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-foreground">Upload File <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-medium text-foreground">
+                                    Upload File <span className="text-red-500">*</span>
+                                </label>
                                 <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-8 cursor-pointer transition-all ${file ? "border-foreground bg-muted/20" : "border-border hover:border-muted-foreground"
                                     }`}>
                                     <Upload size={24} className={file ? "text-foreground" : "text-muted-foreground"} />
@@ -285,14 +349,12 @@ function UploadProofModal({ onClose }: { onClose: () => void }) {
                                         onChange={e => setFile(e.target.files?.[0] || null)} />
                                 </label>
                             </div>
-
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-sm font-medium text-foreground">Note (optional)</label>
                                 <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
                                     placeholder="Describe what work was done..."
                                     className={`${inputCls} resize-none`} />
                             </div>
-
                             <Button type="submit" disabled={!file} className="rounded-full h-11 font-semibold mt-1">
                                 Submit Proof
                             </Button>
@@ -312,8 +374,6 @@ function NGODashboard() {
 
     return (
         <div className="max-w-5xl mx-auto px-6 md:px-10 py-10">
-
-            {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
@@ -324,7 +384,6 @@ function NGODashboard() {
                 </Button>
             </div>
 
-            {/* Stats row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                 {[
                     { icon: Briefcase, label: "Active Jobs", value: "1" },
@@ -340,7 +399,6 @@ function NGODashboard() {
                 ))}
             </div>
 
-            {/* Posted Jobs */}
             <div>
                 <h2 className="text-lg font-bold text-foreground mb-4">Posted Jobs</h2>
                 <div className="flex flex-col gap-4">
@@ -419,10 +477,7 @@ function WorkerDashboard() {
     const [showUpload, setShowUpload] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
     const [search, setSearch] = useState("")
-    const [filters, setFilters] = useState({ minSalary: "", position: "", experience: "" })
-
-    const setFilter = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }))
+    const [filters, setFilters] = useState({ minSalary: "", experience: "" })
 
     const filteredJobs = fakeAvailableJobs.filter(job => {
         const matchSearch = job.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -434,8 +489,6 @@ function WorkerDashboard() {
 
     return (
         <div className="max-w-5xl mx-auto px-6 md:px-10 py-10">
-
-            {/* Header */}
             <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
@@ -468,25 +521,31 @@ function WorkerDashboard() {
                 </Button>
             </div>
 
-            {/* Filter panel */}
+            {/* Filter panel — uses shadcn Select too */}
             {showFilters && (
                 <div className="bg-card border border-border rounded-2xl p-5 mb-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min. Salary (₹)</label>
-                        <input name="minSalary" type="number" value={filters.minSalary} onChange={setFilter}
+                        <input name="minSalary" type="number" min="0" value={filters.minSalary}
+                            onChange={e => setFilters(prev => ({ ...prev, minSalary: e.target.value }))}
                             placeholder="e.g. 15000" className={inputCls} />
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Experience</label>
-                        <select name="experience" value={filters.experience} onChange={setFilter} className={selectCls}>
-                            <option value="">Any</option>
-                            {["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"].map(e => (
-                                <option key={e} value={e}>{e}</option>
-                            ))}
-                        </select>
+                        <Select value={filters.experience} onValueChange={v => setFilters(prev => ({ ...prev, experience: v === "any" ? "" : v }))}>
+                            <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
+                                <SelectValue placeholder="Any" />
+                            </SelectTrigger>
+                            <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
+                                <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any</SelectItem>
+                                {["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"].map(e => (
+                                    <SelectItem key={e} value={e} className="rounded-lg text-sm cursor-pointer">{e}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="flex items-end">
-                        <button onClick={() => setFilters({ minSalary: "", position: "", experience: "" })}
+                        <button onClick={() => setFilters({ minSalary: "", experience: "" })}
                             className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                             Clear filters
                         </button>
@@ -494,7 +553,6 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* Jobs list */}
             <h2 className="text-lg font-bold text-foreground mb-4">
                 Available Jobs <span className="text-muted-foreground font-normal text-base">({filteredJobs.length})</span>
             </h2>
@@ -503,7 +561,7 @@ function WorkerDashboard() {
                 <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                     <AlertCircle size={32} className="text-muted-foreground" />
                     <p className="text-muted-foreground">No jobs match your filters.</p>
-                    <button onClick={() => { setSearch(""); setFilters({ minSalary: "", position: "", experience: "" }) }}
+                    <button onClick={() => { setSearch(""); setFilters({ minSalary: "", experience: "" }) }}
                         className="text-sm text-foreground font-semibold hover:underline">
                         Clear all filters
                     </button>
@@ -589,7 +647,6 @@ function WorkerDashboard() {
 
 export default function Dashboard() {
     // TODO: replace with real role from JWT token when backend is ready
-    // const role = getUserRoleFromToken()  →  "ngo" | "worker"
     const [role, setRole] = useState<"ngo" | "worker">("ngo")
 
     return (

@@ -1,9 +1,16 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { ChevronRight, Check, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react"
 
-// ─── Reusable field components ────────────────────────────────────────────────
+// ─── Field ────────────────────────────────────────────────────────────────────
 
 function Field({
     label, name, type = "text", value, onChange, placeholder, required = true,
@@ -39,29 +46,6 @@ function Field({
     )
 }
 
-function SelectField({
-    label, name, value, onChange, options, required = true,
-}: {
-    label: string; name: string; value: string
-    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
-    options: string[]; required?: boolean
-}) {
-    return (
-        <div className="flex flex-col gap-1.5">
-            <label htmlFor={name} className="text-sm font-medium text-foreground">
-                {label} {required && <span className="text-red-500">*</span>}
-            </label>
-            <select
-                id={name} name={name} value={value} onChange={onChange} required={required}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all appearance-none cursor-pointer"
-            >
-                <option value="">Select {label}</option>
-                {options.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-        </div>
-    )
-}
-
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ current, steps }: { current: number; steps: string[] }) {
@@ -73,9 +57,7 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
                 const active = current === stepNum
                 return (
                     <div key={i} className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done ? "bg-foreground text-background"
-                            : active ? "bg-foreground text-background"
-                                : "bg-muted text-muted-foreground border border-border"
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done || active ? "bg-foreground text-background" : "bg-muted text-muted-foreground border border-border"
                             }`}>
                             {done ? <Check size={13} /> : stepNum}
                         </div>
@@ -92,7 +74,7 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
     )
 }
 
-// ─── Indian states list ───────────────────────────────────────────────────────
+// ─── Data ─────────────────────────────────────────────────────────────────────
 
 const INDIAN_STATES = [
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
@@ -115,30 +97,22 @@ export default function RegisterNGO() {
         username: "", password: "", confirmPassword: "",
     })
 
-    const set = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    const set = (e: React.ChangeEvent<HTMLInputElement>) =>
         setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
     const handleStep1 = (e: React.FormEvent) => {
         e.preventDefault()
+        if (!form.state) { alert("Please select a state."); return }
         setStep(2)
     }
 
     const handleStep2 = (e: React.FormEvent) => {
         e.preventDefault()
-        if (form.password !== form.confirmPassword) {
-            alert("Passwords do not match.")
-            return
-        }
-        if (form.password.length < 8) {
-            alert("Password must be at least 8 characters.")
-            return
-        }
+        if (form.password !== form.confirmPassword) { alert("Passwords do not match."); return }
+        if (form.password.length < 8) { alert("Password must be at least 8 characters."); return }
         setLoading(true)
         // TODO: replace with real API call
-        setTimeout(() => {
-            setLoading(false)
-            setStep(3)
-        }, 2000)
+        setTimeout(() => { setLoading(false); setStep(3) }, 2000)
     }
 
     // ── Success screen ──
@@ -146,13 +120,13 @@ export default function RegisterNGO() {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center px-4 pt-24 pb-12">
                 <div className="w-full max-w-md text-center flex flex-col items-center gap-5">
-                    <div className="w-20 h-20 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center">
-                        <Check size={32} className="text-green-600" />
+                    <div className="w-20 h-20 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center">
+                        <Check size={32} className="text-green-500" />
                     </div>
                     <div>
                         <h2 className="text-2xl font-bold text-foreground">NGO Registered!</h2>
                         <p className="text-muted-foreground mt-2 text-sm max-w-xs mx-auto leading-relaxed">
-                            <span className="font-semibold text-foreground">{form.ngoName}</span> has been successfully registered and verified. You can now log in to your dashboard.
+                            <span className="font-semibold text-foreground">{form.ngoName}</span> has been successfully registered. You can now log in to your dashboard.
                         </p>
                     </div>
                     <div className="flex gap-3 mt-2">
@@ -177,7 +151,8 @@ export default function RegisterNGO() {
                     onClick={() => step === 1 ? navigate("/register") : setStep(1)}
                     className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
                 >
-                    <ArrowLeft size={15} /> {step === 1 ? "Back to register" : "Back to NGO details"}
+                    <ArrowLeft size={15} />
+                    {step === 1 ? "Back to register" : "Back to NGO details"}
                 </button>
 
                 {/* Title */}
@@ -188,33 +163,54 @@ export default function RegisterNGO() {
                     </p>
                 </div>
 
-                {/* Step indicator */}
                 <StepIndicator current={step} steps={["NGO Details", "Account Setup"]} />
 
-                {/* ── Step 1: NGO details ── */}
+                {/* ── Step 1 ── */}
                 {step === 1 && (
                     <form onSubmit={handleStep1} className="flex flex-col gap-5">
                         <Field label="NGO Name" name="ngoName" value={form.ngoName} onChange={set}
                             placeholder="e.g. Help India Foundation" />
                         <Field label="Registration Number" name="regNumber" value={form.regNumber} onChange={set}
                             placeholder="e.g. MH/2023/0123456" />
+
                         <div className="grid grid-cols-2 gap-4">
-                            <Field label="Country" name="country" value={form.country} onChange={set} placeholder="India" />
-                            <SelectField label="State" name="state" value={form.state} onChange={set} options={INDIAN_STATES} />
+                            <Field label="Country" name="country" value={form.country} onChange={set}
+                                placeholder="India" />
+
+                            {/* shadcn Select for State */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-foreground">
+                                    State <span className="text-red-500">*</span>
+                                </label>
+                                <Select value={form.state} onValueChange={v => setForm(prev => ({ ...prev, state: v }))}>
+                                    <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-[42px] focus:ring-ring">
+                                        <SelectValue placeholder="Select State" />
+                                    </SelectTrigger>
+                                    <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground max-h-60">
+                                        {INDIAN_STATES.map(s => (
+                                            <SelectItem key={s} value={s} className="rounded-lg text-sm cursor-pointer focus:bg-accent focus:text-accent-foreground">
+                                                {s}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <Field label="PAN Number" name="panNumber" value={form.panNumber} onChange={set}
                                 placeholder="ABCDE1234F" />
                             <Field label="DARPAN ID" name="darpanId" value={form.darpanId} onChange={set}
                                 placeholder="GJ/2021/0123456" />
                         </div>
+
                         <Button type="submit" className="rounded-full h-11 font-semibold mt-2">
                             Continue <ChevronRight size={16} className="ml-1" />
                         </Button>
                     </form>
                 )}
 
-                {/* ── Step 2: Account credentials ── */}
+                {/* ── Step 2 ── */}
                 {step === 2 && (
                     <form onSubmit={handleStep2} className="flex flex-col gap-5">
                         <Field label="Username" name="username" value={form.username} onChange={set}
