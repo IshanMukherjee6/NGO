@@ -473,6 +473,8 @@ function NGODashboard() {
 // ─── Worker Dashboard ─────────────────────────────────────────────────────────
 
 function WorkerDashboard() {
+    const [isLoggedIn, setIsLoggedIn] = useState(false)
+    const [showAuthModal, setShowAuthModal] = useState(false)
     const [showCompleted, setShowCompleted] = useState(false)
     const [showUpload, setShowUpload] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
@@ -590,7 +592,13 @@ function WorkerDashboard() {
                                         <span className="text-xs bg-muted px-2.5 py-1 rounded-lg text-muted-foreground">{job.experience}</span>
                                     </div>
                                 </div>
-                                <Button size="sm" className="rounded-full px-5 flex-shrink-0 font-semibold">Apply</Button>
+                                <Button size="sm" className="rounded-full px-5 flex-shrink-0 font-semibold" onClick={() => {
+                                    if (!isLoggedIn) {
+                                        setShowAuthModal(true)
+                                    } else {
+                                        console.log("Apply to job:", job.id) // later → call backend API
+                                    }
+                                }}>Apply</Button>
                             </div>
                         </div>
                     ))}
@@ -639,6 +647,32 @@ function WorkerDashboard() {
             )}
 
             {showUpload && <UploadProofModal onClose={() => setShowUpload(false)} />}
+            {showAuthModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={() => setShowAuthModal(false)}
+                    />
+                    <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-md p-6 text-center">
+
+                        <h2 className="text-xl font-bold text-foreground mb-2">
+                            Login Required
+                        </h2>
+                        <p className="text-sm text-muted-foreground mb-6">
+                            Please login or register to apply for jobs.
+                        </p>
+
+                        <div className="flex gap-3 justify-center">
+                            <Button className="rounded-full px-6">
+                                Login
+                            </Button>
+                            <Button variant="outline" className="rounded-full px-6">
+                                Register
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

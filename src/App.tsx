@@ -13,6 +13,7 @@ import Login from "./pages/Login"
 
 import Dashboard from "./pages/Dashboard"
 
+import Jobs from "./pages/Jobs"
 const slides = [
   {
     image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80",
@@ -123,6 +124,7 @@ export default function App() {
         <Route path="/register/worker" element={<RegisterWorker />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/jobs" element={<Jobs />} />
       </Routes>
     </div>
   )

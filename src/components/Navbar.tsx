@@ -52,6 +52,9 @@ export default function Navbar() {
                 >
                     Register
                 </Button>
+                <Button onClick={() => navigate("/jobs")}>
+                    Jobs
+                </Button>
             </div>
 
             {/* Mobile hamburger */}
