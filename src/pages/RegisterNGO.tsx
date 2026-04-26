@@ -1,16 +1,20 @@
+// src/pages/RegisterNGO.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Project 1's RegisterNGO UI — visually unchanged.
+// Registration logic: calls signUpNGO() → Firebase createUserWithEmailAndPassword
+// + Firestore profile write (mirrors POST /api/auth/createuser in Project 2).
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+    Select, SelectContent, SelectItem,
+    SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { ChevronRight, Check, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react"
-
-// ─── Field ────────────────────────────────────────────────────────────────────
+import { useAuth } from "../context/AuthContext"
+import { useToast } from "../context/ToastContext"
 
 function Field({
     label, name, type = "text", value, onChange, placeholder, required = true,
@@ -21,7 +25,6 @@ function Field({
 }) {
     const [show, setShow] = useState(false)
     const isPassword = type === "password"
-
     return (
         <div className="flex flex-col gap-1.5">
             <label htmlFor={name} className="text-sm font-medium text-foreground">
@@ -46,8 +49,6 @@ function Field({
     )
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
-
 function StepIndicator({ current, steps }: { current: number; steps: string[] }) {
     return (
         <div className="flex items-center gap-2 mb-8">
@@ -57,8 +58,7 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
                 const active = current === stepNum
                 return (
                     <div key={i} className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done || active ? "bg-foreground text-background" : "bg-muted text-muted-foreground border border-border"
-                            }`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done || active ? "bg-foreground text-background" : "bg-muted text-muted-foreground border border-border"}`}>
                             {done ? <Check size={13} /> : stepNum}
                         </div>
                         <span className={`text-xs font-medium hidden sm:block ${active || done ? "text-foreground" : "text-muted-foreground"}`}>
@@ -74,8 +74,6 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
     )
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
 const INDIAN_STATES = [
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
     "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
@@ -84,13 +82,13 @@ const INDIAN_STATES = [
     "Uttarakhand", "West Bengal", "Delhi", "Jammu & Kashmir", "Ladakh",
 ]
 
-// ─── Main component ───────────────────────────────────────────────────────────
-
 export default function RegisterNGO() {
     const navigate = useNavigate()
+    const { signUpNGO } = useAuth()
+    const { showToast } = useToast()
+
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
-
     const [form, setForm] = useState({
         ngoName: "", regNumber: "", country: "India", state: "",
         panNumber: "", darpanId: "",
@@ -102,20 +100,44 @@ export default function RegisterNGO() {
 
     const handleStep1 = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!form.state) { alert("Please select a state."); return }
+        if (!form.state) { showToast("Please select a state.", "error"); return }
         setStep(2)
     }
 
-    const handleStep2 = (e: React.FormEvent) => {
+    const handleStep2 = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (form.password !== form.confirmPassword) { alert("Passwords do not match."); return }
-        if (form.password.length < 8) { alert("Password must be at least 8 characters."); return }
+        if (form.password !== form.confirmPassword) {
+            showToast("Passwords do not match.", "error"); return
+        }
+        if (form.password.length < 8) {
+            showToast("Password must be at least 8 characters.", "error"); return
+        }
         setLoading(true)
-        // TODO: replace with real API call
-        setTimeout(() => { setLoading(false); setStep(3) }, 2000)
+        try {
+            await signUpNGO({
+                ngoName: form.ngoName,
+                regNumber: form.regNumber,
+                country: form.country,
+                state: form.state,
+                panNumber: form.panNumber,
+                darpanId: form.darpanId,
+                username: form.username,
+                password: form.password,
+            })
+            showToast("NGO registered successfully!", "success")
+            setStep(3)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Registration failed"
+            if (msg.includes("already-in-use")) {
+                showToast("This username is already taken. Please choose another.", "error")
+            } else {
+                showToast(msg, "error")
+            }
+        } finally {
+            setLoading(false)
+        }
     }
 
-    // ── Success screen ──
     if (step === 3) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center px-4 pt-24 pb-12">
@@ -126,15 +148,15 @@ export default function RegisterNGO() {
                     <div>
                         <h2 className="text-2xl font-bold text-foreground">NGO Registered!</h2>
                         <p className="text-muted-foreground mt-2 text-sm max-w-xs mx-auto leading-relaxed">
-                            <span className="font-semibold text-foreground">{form.ngoName}</span> has been successfully registered. You can now log in to your dashboard.
+                            <span className="font-semibold text-foreground">{form.ngoName}</span> has been successfully registered. You can now access your dashboard.
                         </p>
                     </div>
                     <div className="flex gap-3 mt-2">
                         <Button variant="outline" className="rounded-full px-6" onClick={() => navigate("/")}>
                             Go Home
                         </Button>
-                        <Button className="rounded-full px-6" onClick={() => navigate("/login")}>
-                            Log In
+                        <Button className="rounded-full px-6" onClick={() => navigate("/dashboard")}>
+                            Go to Dashboard
                         </Button>
                     </div>
                 </div>
@@ -146,7 +168,6 @@ export default function RegisterNGO() {
         <div className="min-h-screen bg-background px-4 pt-28 pb-16 flex justify-center">
             <div className="w-full max-w-lg">
 
-                {/* Back button */}
                 <button
                     onClick={() => step === 1 ? navigate("/register") : setStep(1)}
                     className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
@@ -155,7 +176,6 @@ export default function RegisterNGO() {
                     {step === 1 ? "Back to register" : "Back to NGO details"}
                 </button>
 
-                {/* Title */}
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">Register your NGO</h1>
                     <p className="text-muted-foreground text-sm mt-1">
@@ -165,7 +185,6 @@ export default function RegisterNGO() {
 
                 <StepIndicator current={step} steps={["NGO Details", "Account Setup"]} />
 
-                {/* ── Step 1 ── */}
                 {step === 1 && (
                     <form onSubmit={handleStep1} className="flex flex-col gap-5">
                         <Field label="NGO Name" name="ngoName" value={form.ngoName} onChange={set}
@@ -174,10 +193,7 @@ export default function RegisterNGO() {
                             placeholder="e.g. MH/2023/0123456" />
 
                         <div className="grid grid-cols-2 gap-4">
-                            <Field label="Country" name="country" value={form.country} onChange={set}
-                                placeholder="India" />
-
-                            {/* shadcn Select for State */}
+                            <Field label="Country" name="country" value={form.country} onChange={set} placeholder="India" />
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-sm font-medium text-foreground">
                                     State <span className="text-red-500">*</span>
@@ -198,10 +214,8 @@ export default function RegisterNGO() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <Field label="PAN Number" name="panNumber" value={form.panNumber} onChange={set}
-                                placeholder="ABCDE1234F" />
-                            <Field label="DARPAN ID" name="darpanId" value={form.darpanId} onChange={set}
-                                placeholder="GJ/2021/0123456" />
+                            <Field label="PAN Number" name="panNumber" value={form.panNumber} onChange={set} placeholder="ABCDE1234F" />
+                            <Field label="DARPAN ID" name="darpanId" value={form.darpanId} onChange={set} placeholder="GJ/2021/0123456" />
                         </div>
 
                         <Button type="submit" className="rounded-full h-11 font-semibold mt-2">
@@ -210,7 +224,6 @@ export default function RegisterNGO() {
                     </form>
                 )}
 
-                {/* ── Step 2 ── */}
                 {step === 2 && (
                     <form onSubmit={handleStep2} className="flex flex-col gap-5">
                         <Field label="Username" name="username" value={form.username} onChange={set}
@@ -224,7 +237,7 @@ export default function RegisterNGO() {
                         </p>
                         <Button type="submit" disabled={loading} className="rounded-full h-11 font-semibold mt-2">
                             {loading
-                                ? <><Loader2 size={16} className="animate-spin mr-2" /> Verifying account...</>
+                                ? <><Loader2 size={16} className="animate-spin mr-2" /> Creating account...</>
                                 : "Create NGO Account"}
                         </Button>
                     </form>

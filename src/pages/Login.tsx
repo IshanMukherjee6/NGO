@@ -1,7 +1,17 @@
+// src/pages/Login.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Project 1's Login UI — visually unchanged.
+// Auth logic replaced: instead of POST /api/auth/login → localStorage token,
+// we call Firebase signInWithEmailAndPassword via loginUser().
+// Role-based redirect mirrors Project 2's navigate("/") after login.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Loader2, Eye, EyeOff } from "lucide-react"
+import { useAuth } from "../context/AuthContext"
+import { useToast } from "../context/ToastContext"
 
 function Field({
     label, name, type = "text", value, onChange, placeholder, required = true,
@@ -39,46 +49,38 @@ function Field({
 
 export default function Login() {
     const navigate = useNavigate()
+    const { login } = useAuth()
+    const { showToast } = useToast()
+
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
-
-    const [form, setForm] = useState({
-        username: "", password: ""
-    })
+    const [form, setForm] = useState({ username: "", password: "" })
 
     const set = (e: React.ChangeEvent<HTMLInputElement>) =>
         setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError("")
+
+        if (!form.username || !form.password) {
+            setError("Please enter your username and password.")
+            return
+        }
+
         setLoading(true)
-
-        // TODO: replace with real API call
-        // const res = await fetch("/api/login", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify(form)
-        // })
-        // const data = await res.json()
-        // if (res.ok) {
-        //   localStorage.setItem("token", data.token)
-        //   navigate(data.role === "ngo" ? "/dashboard/ngo" : "/dashboard/worker")
-        // } else {
-        //   setError(data.message)
-        // }
-
-        setTimeout(() => {
-            setLoading(false)
-            // Simulating wrong credentials for demo
-            if (form.username === "" || form.password === "") {
-                setError("Please enter your username and password.")
-                return
-            }
-            // Temporary: navigate to NGO dashboard
-            // Backend will determine the correct redirect based on user role
+        try {
+            const profile = await login(form.username, form.password)
+            showToast("Logged in successfully!", "success")
+            // Role-based redirect — mirrors Project 2's navigate("/") post-login
             navigate("/dashboard")
-        }, 1500)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Invalid credentials"
+            setError("Invalid username or password. Please try again.")
+            showToast("Login failed", "error")
+        } finally {
+            setLoading(false)
+        }
     }
 
     return (
@@ -89,8 +91,8 @@ export default function Login() {
                 <Link to="/" className="flex items-center justify-center gap-2.5 mb-8 group select-none">
                     <div className="w-9 h-9 rounded-xl bg-foreground flex items-center justify-center group-hover:scale-105 transition-transform">
                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                            <circle cx="9" cy="6.5" r="3" fill="#111827" />
-                            <path d="M2.5 15.5c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="#111827" strokeWidth="1.8" strokeLinecap="round" />
+                            <circle cx="9" cy="6.5" r="3" fill="white" />
+                            <path d="M2.5 15.5c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
                         </svg>
                     </div>
                     <span className="font-bold text-[18px] tracking-tight text-foreground">
@@ -111,16 +113,14 @@ export default function Login() {
                     <Field label="Password" name="password" type="password" value={form.password} onChange={set}
                         placeholder="Enter your password" />
 
-                    {/* Forgot password */}
                     <div className="flex justify-end -mt-1">
                         <button type="button" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                             Forgot password?
                         </button>
                     </div>
 
-                    {/* Error message */}
                     {error && (
-                        <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+                        <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl px-4 py-2.5">
                             {error}
                         </p>
                     )}

@@ -1,16 +1,19 @@
+// src/pages/RegisterWorker.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Project 1's RegisterWorker UI — visually unchanged.
+// Calls signUpWorker() → Firebase createUserWithEmailAndPassword + Firestore.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+    Select, SelectContent, SelectItem,
+    SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { ChevronRight, Check, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react"
-
-// ─── Field ────────────────────────────────────────────────────────────────────
+import { useAuth } from "../context/AuthContext"
+import { useToast } from "../context/ToastContext"
 
 function Field({
     label, name, type = "text", value, onChange, placeholder, required = true,
@@ -21,7 +24,6 @@ function Field({
 }) {
     const [show, setShow] = useState(false)
     const isPassword = type === "password"
-
     return (
         <div className="flex flex-col gap-1.5">
             <label htmlFor={name} className="text-sm font-medium text-foreground">
@@ -46,8 +48,6 @@ function Field({
     )
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
-
 function StepIndicator({ current, steps }: { current: number; steps: string[] }) {
     return (
         <div className="flex items-center gap-2 mb-8">
@@ -57,8 +57,7 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
                 const active = current === stepNum
                 return (
                     <div key={i} className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done || active ? "bg-foreground text-background" : "bg-muted text-muted-foreground border border-border"
-                            }`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done || active ? "bg-foreground text-background" : "bg-muted text-muted-foreground border border-border"}`}>
                             {done ? <Check size={13} /> : stepNum}
                         </div>
                         <span className={`text-xs font-medium hidden sm:block ${active || done ? "text-foreground" : "text-muted-foreground"}`}>
@@ -74,8 +73,6 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
     )
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
 const INDIAN_STATES = [
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
     "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
@@ -84,13 +81,13 @@ const INDIAN_STATES = [
     "Uttarakhand", "West Bengal", "Delhi", "Jammu & Kashmir", "Ladakh",
 ]
 
-// ─── Main component ───────────────────────────────────────────────────────────
-
 export default function RegisterWorker() {
     const navigate = useNavigate()
+    const { signUpWorker } = useAuth()
+    const { showToast } = useToast()
+
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
-
     const [form, setForm] = useState({
         fullName: "", age: "", phone: "", panNumber: "",
         country: "India", state: "", city: "", district: "",
@@ -102,20 +99,46 @@ export default function RegisterWorker() {
 
     const handleStep1 = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!form.state) { alert("Please select a state."); return }
+        if (!form.state) { showToast("Please select a state.", "error"); return }
         setStep(2)
     }
 
-    const handleStep2 = (e: React.FormEvent) => {
+    const handleStep2 = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (form.password !== form.confirmPassword) { alert("Passwords do not match."); return }
-        if (form.password.length < 8) { alert("Password must be at least 8 characters."); return }
+        if (form.password !== form.confirmPassword) {
+            showToast("Passwords do not match.", "error"); return
+        }
+        if (form.password.length < 8) {
+            showToast("Password must be at least 8 characters.", "error"); return
+        }
         setLoading(true)
-        // TODO: replace with real API call
-        setTimeout(() => { setLoading(false); setStep(3) }, 1500)
+        try {
+            await signUpWorker({
+                fullName: form.fullName,
+                age: form.age,
+                phone: form.phone,
+                panNumber: form.panNumber,
+                country: form.country,
+                state: form.state,
+                city: form.city,
+                district: form.district,
+                username: form.username,
+                password: form.password,
+            })
+            showToast("Worker account created!", "success")
+            setStep(3)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Registration failed"
+            if (msg.includes("already-in-use")) {
+                showToast("This username is already taken. Please choose another.", "error")
+            } else {
+                showToast(msg, "error")
+            }
+        } finally {
+            setLoading(false)
+        }
     }
 
-    // ── Success screen ──
     if (step === 3) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center px-4 pt-24 pb-12">
@@ -126,15 +149,15 @@ export default function RegisterWorker() {
                     <div>
                         <h2 className="text-2xl font-bold text-foreground">Account Created!</h2>
                         <p className="text-muted-foreground mt-2 text-sm max-w-xs mx-auto leading-relaxed">
-                            Welcome, <span className="font-semibold text-foreground">{form.fullName}</span>! Your worker account is ready. Log in to start receiving job assignments near you.
+                            Welcome, <span className="font-semibold text-foreground">{form.fullName}</span>! Your worker account is ready.
                         </p>
                     </div>
                     <div className="flex gap-3 mt-2">
                         <Button variant="outline" className="rounded-full px-6" onClick={() => navigate("/")}>
                             Go Home
                         </Button>
-                        <Button className="rounded-full px-6" onClick={() => navigate("/login")}>
-                            Log In
+                        <Button className="rounded-full px-6" onClick={() => navigate("/dashboard")}>
+                            Go to Dashboard
                         </Button>
                     </div>
                 </div>
@@ -146,7 +169,6 @@ export default function RegisterWorker() {
         <div className="min-h-screen bg-background px-4 pt-28 pb-16 flex justify-center">
             <div className="w-full max-w-lg">
 
-                {/* Back button */}
                 <button
                     onClick={() => step === 1 ? navigate("/register") : setStep(1)}
                     className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
@@ -155,7 +177,6 @@ export default function RegisterWorker() {
                     {step === 1 ? "Back to register" : "Back to personal details"}
                 </button>
 
-                {/* Title */}
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">Register as a Worker</h1>
                     <p className="text-muted-foreground text-sm mt-1">
@@ -165,30 +186,21 @@ export default function RegisterWorker() {
 
                 <StepIndicator current={step} steps={["Personal Details", "Account Setup"]} />
 
-                {/* ── Step 1 ── */}
                 {step === 1 && (
                     <form onSubmit={handleStep1} className="flex flex-col gap-5">
                         <div className="grid grid-cols-2 gap-4">
-                            <Field label="Full Name" name="fullName" value={form.fullName} onChange={set}
-                                placeholder="Your full name" />
-                            <Field label="Age" name="age" type="number" value={form.age} onChange={set}
-                                placeholder="e.g. 28" />
+                            <Field label="Full Name" name="fullName" value={form.fullName} onChange={set} placeholder="Your full name" />
+                            <Field label="Age" name="age" type="number" value={form.age} onChange={set} placeholder="e.g. 28" />
                         </div>
 
-                        <Field label="Phone Number" name="phone" type="tel" value={form.phone} onChange={set}
-                            placeholder="+91 98765 43210" />
-                        <Field label="PAN Number" name="panNumber" value={form.panNumber} onChange={set}
-                            placeholder="ABCDE1234F" />
+                        <Field label="Phone Number" name="phone" type="tel" value={form.phone} onChange={set} placeholder="+91 98765 43210" />
+                        <Field label="PAN Number" name="panNumber" value={form.panNumber} onChange={set} placeholder="ABCDE1234F" />
 
-                        {/* Location */}
                         <div>
                             <p className="text-sm font-semibold text-foreground mb-3">Home Location</p>
                             <div className="flex flex-col gap-4">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Field label="Country" name="country" value={form.country} onChange={set}
-                                        placeholder="India" />
-
-                                    {/* shadcn Select for State */}
+                                    <Field label="Country" name="country" value={form.country} onChange={set} placeholder="India" />
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-sm font-medium text-foreground">
                                             State <span className="text-red-500">*</span>
@@ -209,10 +221,8 @@ export default function RegisterWorker() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Field label="City" name="city" value={form.city} onChange={set}
-                                        placeholder="Your city" />
-                                    <Field label="District" name="district" value={form.district} onChange={set}
-                                        placeholder="Your district" />
+                                    <Field label="City" name="city" value={form.city} onChange={set} placeholder="Your city" />
+                                    <Field label="District" name="district" value={form.district} onChange={set} placeholder="Your district" />
                                 </div>
                             </div>
                         </div>
@@ -223,13 +233,10 @@ export default function RegisterWorker() {
                     </form>
                 )}
 
-                {/* ── Step 2 ── */}
                 {step === 2 && (
                     <form onSubmit={handleStep2} className="flex flex-col gap-5">
-                        <Field label="Username" name="username" value={form.username} onChange={set}
-                            placeholder="Choose a unique username" />
-                        <Field label="Password" name="password" type="password" value={form.password} onChange={set}
-                            placeholder="Minimum 8 characters" />
+                        <Field label="Username" name="username" value={form.username} onChange={set} placeholder="Choose a unique username" />
+                        <Field label="Password" name="password" type="password" value={form.password} onChange={set} placeholder="Minimum 8 characters" />
                         <Field label="Confirm Password" name="confirmPassword" type="password"
                             value={form.confirmPassword} onChange={set} placeholder="Re-enter your password" />
                         <Button type="submit" disabled={loading} className="rounded-full h-11 font-semibold mt-2">

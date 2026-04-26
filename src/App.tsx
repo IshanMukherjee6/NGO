@@ -1,19 +1,37 @@
+// src/App.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Main router — replaces both Project 1's App.tsx and Project 2's App.js.
+//
+// Key changes from Project 1:
+//   • Wrapped with AuthProvider + ToastProvider (replaces NoteState + Alert).
+//   • /dashboard is protected (requires auth).
+//   • Home hero slideshow kept exactly from Project 1.
+//   • No temp role-switcher.
+//
+// Key changes from Project 2:
+//   • No Express server needed.
+//   • No BrowserRouter wrapping here — moved to main.tsx (already was there).
+//   • NoteState removed; auth lives in AuthProvider.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useEffect, useState } from "react"
 import { Routes, Route, useNavigate } from "react-router-dom"
 
 import Navbar from "./components/Navbar"
-import About from "./pages/About"
+import ProtectedRoute from "./components/ProtectedRoute"
+import { AuthProvider } from "./context/AuthContext"
+import { ToastProvider } from "./context/ToastContext"
 import { Button } from "@/components/ui/button"
 
+import About from "./pages/About"
 import Register from "./pages/Register"
 import RegisterNGO from "./pages/RegisterNGO"
 import RegisterWorker from "./pages/RegisterWorker"
-
 import Login from "./pages/Login"
-
 import Dashboard from "./pages/Dashboard"
-
 import Jobs from "./pages/Jobs"
+
+// ── Hero slideshow data (unchanged from Project 1) ────────────────────────────
 
 const slides = [
   {
@@ -52,50 +70,34 @@ function Home() {
   const goTo = (i: number) => {
     if (i === current) return
     setVisible(false)
-    setTimeout(() => {
-      setCurrent(i)
-      setVisible(true)
-    }, 400)
+    setTimeout(() => { setCurrent(i); setVisible(true) }, 400)
   }
 
   const slide = slides[current]
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-
-      {/* Hero */}
       <section className="relative h-screen w-full overflow-hidden">
         {slides.map((s, i) => (
           <div
             key={i}
             className="absolute inset-0 bg-cover bg-center transition-opacity duration-700"
-            style={{
-              backgroundImage: `url(${s.image})`,
-              opacity: i === current ? 1 : 0,
-            }}
+            style={{ backgroundImage: `url(${s.image})`, opacity: i === current ? 1 : 0 }}
           />
         ))}
-
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/15" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/10 to-transparent" />
 
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-2 z-20">
           {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              className={`h-[3px] rounded-full transition-all duration-500 ${i === current ? "w-8 bg-white" : "w-2.5 bg-white/35"
-                }`}
-            />
+            <button key={i} onClick={() => goTo(i)}
+              className={`h-[3px] rounded-full transition-all duration-500 ${i === current ? "w-8 bg-white" : "w-2.5 bg-white/35"}`} />
           ))}
         </div>
 
         <div className="relative z-10 flex flex-col justify-center h-full max-w-5xl mx-auto px-6 md:px-14">
-          <h1 className="text-5xl font-bold text-white mb-6">
-            {slide.heading}
-          </h1>
+          <h1 className="text-5xl font-bold text-white mb-6">{slide.heading}</h1>
           <p className="text-white/70 mb-8">{slide.sub}</p>
-
           <div className="flex gap-3">
             <Button onClick={() => navigate("/register/worker")}>Join as Worker</Button>
             <Button variant="outline" onClick={() => navigate("/register/ngo")}>Register NGO</Button>
@@ -103,30 +105,36 @@ function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-10 text-center text-sm">
-        © 2025 NGO Connect
+      <footer className="border-t py-10 text-center text-sm text-muted-foreground">
+        © 2025 NGO Connect. All rights reserved.
       </footer>
     </div>
   )
-
 }
 
 export default function App() {
   return (
-    <div>
-      <Navbar />
-
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/register/ngo" element={<RegisterNGO />} />
-        <Route path="/register/worker" element={<RegisterWorker />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/jobs" element={<Jobs />} />
-      </Routes>
-    </div>
+    <AuthProvider>
+      <ToastProvider>
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/register/ngo" element={<RegisterNGO />} />
+          <Route path="/register/worker" element={<RegisterWorker />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/jobs" element={<Jobs />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </ToastProvider>
+    </AuthProvider>
   )
 }

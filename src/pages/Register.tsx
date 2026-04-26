@@ -1,3 +1,9 @@
+// src/pages/Register.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Visually unchanged from Project 1. No backend changes needed here —
+// this is just a routing page that directs to /register/ngo or /register/worker.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useNavigate } from "react-router-dom"
 import { Building2, HardHat, ChevronRight } from "lucide-react"
 
@@ -8,7 +14,6 @@ export default function Register() {
         <div className="min-h-screen bg-background flex items-center justify-center px-4 pt-24 pb-12">
             <div className="w-full max-w-md">
 
-                {/* Heading */}
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">Create an account</h1>
                     <p className="text-muted-foreground mt-2 text-base">
@@ -16,10 +21,7 @@ export default function Register() {
                     </p>
                 </div>
 
-                {/* Option cards */}
                 <div className="flex flex-col gap-4">
-
-                    {/* NGO */}
                     <button
                         onClick={() => navigate("/register/ngo")}
                         className="flex items-center gap-5 p-6 rounded-2xl border-2 border-border hover:border-foreground bg-card hover:bg-muted/40 transition-all group text-left w-full"
@@ -36,7 +38,6 @@ export default function Register() {
                         <ChevronRight size={20} className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                     </button>
 
-                    {/* Worker */}
                     <button
                         onClick={() => navigate("/register/worker")}
                         className="flex items-center gap-5 p-6 rounded-2xl border-2 border-border hover:border-foreground bg-card hover:bg-muted/40 transition-all group text-left w-full"
@@ -54,13 +55,9 @@ export default function Register() {
                     </button>
                 </div>
 
-                {/* Login link */}
                 <p className="text-center text-sm text-muted-foreground mt-8">
                     Already have an account?{" "}
-                    <button
-                        onClick={() => navigate("/login")}
-                        className="text-foreground font-semibold hover:underline"
-                    >
+                    <button onClick={() => navigate("/login")} className="text-foreground font-semibold hover:underline">
                         Log in
                     </button>
                 </p>
