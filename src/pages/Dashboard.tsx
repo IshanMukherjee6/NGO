@@ -1,20 +1,4 @@
 // src/pages/Dashboard.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// FIXES applied on top of original:
-//
-//   NGO Dashboard:
-//     • Added "Pending Applications" section — NGO can Accept or Reject workers.
-//     • updateApplicationStatus() is called on button click and list refreshes.
-//     • Pending count badge shown on section header.
-//
-//   Worker Dashboard:
-//     • "Failed to load data" fixed via jobService.ts (removed orderBy).
-//     • Dashboard now clearly shows three sections:
-//         1. Active Jobs   — applications where status === "accepted"
-//         2. Pending Jobs  — applications where status === "pending"
-//         3. Available Jobs — jobs not yet applied to
-//     • Stats cards now link to the correct section via anchor scroll.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -37,6 +21,8 @@ import {
 } from "../lib/jobService"
 import { uploadProofFile } from "../lib/storageService"
 import type { WorkerProfile } from "../lib/authService"
+import { useNavigate } from "react-router-dom"
+import { BarChart2 } from "lucide-react"
 
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
 
@@ -306,8 +292,11 @@ function UploadProofModal({
 // ── NGO Dashboard ──────────────────────────────────────────────────────────────
 
 function NGODashboard() {
+    // ✅ ALL hooks at the top — before any early returns
     const { currentUser, userProfile } = useAuth()
     const { showToast } = useToast()
+    const navigate = useNavigate()  // ✅ FIXED: moved up here from below the early return
+
     const [showPostJob, setShowPostJob] = useState(false)
     const [expandedJob, setExpandedJob] = useState<string | null>(null)
     const [jobs, setJobs] = useState<Job[]>([])
@@ -335,7 +324,6 @@ function NGODashboard() {
 
     useEffect(() => { loadData() }, [currentUser])
 
-    // FIX: Separate pending applications so NGO can approve/reject
     const pendingApplications = applications.filter(a => a.status === "pending")
     const activeJobs = jobs.filter(j => j.status === "active").length
     const totalWorkers = applications.filter(a => a.status === "accepted").length
@@ -345,7 +333,6 @@ function NGODashboard() {
     const getAcceptedWorkersForJob = (jobId: string) =>
         applications.filter(a => a.jobId === jobId && a.status === "accepted")
 
-    // FIX: Handle accept/reject with UI feedback
     const handleApplicationDecision = async (appId: string, decision: "accepted" | "rejected") => {
         setUpdatingAppId(appId)
         try {
@@ -362,6 +349,7 @@ function NGODashboard() {
         }
     }
 
+    // ✅ Early return is now AFTER all hooks
     if (loading) {
         return (
             <div className="flex items-center justify-center py-32">
@@ -373,14 +361,26 @@ function NGODashboard() {
     return (
         <div className="max-w-5xl mx-auto px-6 md:px-10 py-10">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">{ngoName}</h1>
                 </div>
-                <Button onClick={() => setShowPostJob(true)} className="rounded-full px-6 font-semibold gap-2">
-                    <Plus size={16} /> Post a Job
-                </Button>
+                <div className="flex gap-2 flex-wrap">
+                    <Button
+                        variant="outline"
+                        onClick={() => navigate("/survey")}
+                        className="rounded-full px-5 gap-2 font-medium"
+                    >
+                        <BarChart2 size={15} /> Survey Analysis
+                    </Button>
+                    <Button
+                        onClick={() => setShowPostJob(true)}
+                        className="rounded-full px-6 font-semibold gap-2"
+                    >
+                        <Plus size={16} /> Post a Job
+                    </Button>
+                </div>
             </div>
 
             {/* Stats */}
@@ -399,7 +399,7 @@ function NGODashboard() {
                 ))}
             </div>
 
-            {/* ── FIX: Pending Applications Section ─────────────────────────────── */}
+            {/* Pending Applications */}
             <div className="mb-10">
                 <div className="flex items-center gap-3 mb-4">
                     <h2 className="text-lg font-bold text-foreground">Pending Applications</h2>
@@ -592,7 +592,6 @@ function WorkerDashboard() {
 
     useEffect(() => { loadData() }, [currentUser])
 
-    // FIX: Clearly separate the three categories
     const activeApps = myApplications.filter(a => a.status === "accepted")
     const pendingApps = myApplications.filter(a => a.status === "pending")
     const appliedJobIds = new Set(myApplications.map(a => a.jobId))
@@ -668,7 +667,7 @@ function WorkerDashboard() {
                 ))}
             </div>
 
-            {/* ── FIX: Active Jobs Section ─────────────────────────────────────── */}
+            {/* Active Jobs */}
             {activeApps.length > 0 && (
                 <div className="mb-8">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
@@ -705,7 +704,7 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* ── FIX: Pending Applications Section ────────────────────────────── */}
+            {/* Pending Applications */}
             {pendingApps.length > 0 && (
                 <div className="mb-8">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
@@ -730,9 +729,8 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* ── Available Jobs Section ────────────────────────────────────────── */}
+            {/* Available Jobs */}
             <div>
-                {/* Search + Filter */}
                 <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="relative flex-1 min-w-[200px]">
                         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
