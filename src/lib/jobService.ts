@@ -2,10 +2,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXES:
 //   • Removed orderBy() from all queries to avoid composite index errors.
-//     (Firestore requires composite indexes for where + orderBy combos.)
 //     Results are sorted client-side instead.
-//   • updateApplicationStatus() now reads app data BEFORE updating status
-//     to avoid reading stale data after the update.
+//   • updateApplicationStatus() reads app data BEFORE updating status.
+//   • onWorkerApplied() called after applyForJob() to trigger AI scoring.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -22,6 +21,7 @@ import {
     type Timestamp,
 } from "firebase/firestore"
 import { db } from "./firebase"
+import { onWorkerApplied } from "./scoringService"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,8 +73,6 @@ export interface ProofSubmission {
 // ── Jobs ──────────────────────────────────────────────────────────────────────
 
 export async function fetchAllJobs(): Promise<Job[]> {
-    // FIX: Removed orderBy to avoid composite index requirement.
-    // Sorted client-side by createdAt descending.
     const q = query(
         collection(db, "jobs"),
         where("status", "==", "active")
@@ -89,7 +87,6 @@ export async function fetchAllJobs(): Promise<Job[]> {
 }
 
 export async function fetchNGOJobs(ngoUid: string): Promise<Job[]> {
-    // FIX: Removed orderBy, sorted client-side.
     const q = query(
         collection(db, "jobs"),
         where("postedBy", "==", ngoUid)
@@ -158,11 +155,14 @@ export async function applyForJob(
         status: "pending",
         appliedAt: serverTimestamp(),
     })
+
+    // Trigger AI scoring in the background — never blocks the application
+    onWorkerApplied(ref.id, worker.uid, job.id)
+
     return ref.id
 }
 
 export async function fetchWorkerApplications(workerUid: string): Promise<Application[]> {
-    // FIX: Removed orderBy, sorted client-side.
     const q = query(
         collection(db, "applications"),
         where("workerId", "==", workerUid)
@@ -177,7 +177,6 @@ export async function fetchWorkerApplications(workerUid: string): Promise<Applic
 }
 
 export async function fetchNGOApplications(ngoUid: string): Promise<Application[]> {
-    // FIX: Removed orderBy, sorted client-side.
     const q = query(
         collection(db, "applications"),
         where("ngoId", "==", ngoUid)
@@ -195,7 +194,6 @@ export async function updateApplicationStatus(
     appId: string,
     status: "accepted" | "rejected"
 ): Promise<void> {
-    // FIX: Read app data BEFORE updating so we have the jobId available.
     const appRef = doc(db, "applications", appId)
     const appSnap = await getDoc(appRef)
 
@@ -203,7 +201,6 @@ export async function updateApplicationStatus(
 
     await updateDoc(appRef, { status })
 
-    // If accepted, increment job.filled and close job if full
     if (status === "accepted") {
         const jobRef = doc(db, "jobs", appSnap.data().jobId)
         const jobSnap = await getDoc(jobRef)

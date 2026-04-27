@@ -1,19 +1,10 @@
 // src/pages/Dashboard.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-// FIXES applied on top of original:
-//
-//   NGO Dashboard:
-//     • Added "Pending Applications" section — NGO can Accept or Reject workers.
-//     • updateApplicationStatus() is called on button click and list refreshes.
-//     • Pending count badge shown on section header.
-//
-//   Worker Dashboard:
-//     • "Failed to load data" fixed via jobService.ts (removed orderBy).
-//     • Dashboard now clearly shows three sections:
-//         1. Active Jobs   — applications where status === "accepted"
-//         2. Pending Jobs  — applications where status === "pending"
-//         3. Available Jobs — jobs not yet applied to
-//     • Stats cards now link to the correct section via anchor scroll.
+// Integrated AI scoring system:
+//   • NGO: "View Applicants (AI)" opens AIApplicationsPanel with ranked workers
+//   • Worker: WorkerScoreCard shows personal AI score + rank on dashboard
+//   • Pending applications section for NGO with accept/reject
+//   • All original UI preserved exactly
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react"
@@ -25,7 +16,7 @@ import {
     Briefcase, Plus, Users, FileCheck, Upload,
     Filter, ChevronDown, X, Phone,
     MapPin, Clock, DollarSign, Building2, CheckCircle,
-    AlertCircle, Search, Loader2, Bell,
+    AlertCircle, Search, Loader2, Bell, Sparkles,
 } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 import { useToast } from "../context/ToastContext"
@@ -37,6 +28,8 @@ import {
 } from "../lib/jobService"
 import { uploadProofFile } from "../lib/storageService"
 import type { WorkerProfile } from "../lib/authService"
+import AIApplicationsPanel from "../components/AIApplicationsPanel"
+import WorkerScoreCard from "../components/WorkerScoreCard"
 
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
 
@@ -314,8 +307,10 @@ function NGODashboard() {
     const [applications, setApplications] = useState<Application[]>([])
     const [loading, setLoading] = useState(true)
     const [updatingAppId, setUpdatingAppId] = useState<string | null>(null)
+    const [aiPanelJob, setAiPanelJob] = useState<Job | null>(null)
 
-    const ngoName = userProfile?.role === "ngo" ? userProfile.ngoName : ""
+    const ngoName = userProfile?.role === "ngo" ? (userProfile as { ngoName?: string }).ngoName ?? "" : ""
+    const isPremiumNGO =  true
 
     const loadData = async () => {
         if (!currentUser) return
@@ -335,7 +330,6 @@ function NGODashboard() {
 
     useEffect(() => { loadData() }, [currentUser])
 
-    // FIX: Separate pending applications so NGO can approve/reject
     const pendingApplications = applications.filter(a => a.status === "pending")
     const activeJobs = jobs.filter(j => j.status === "active").length
     const totalWorkers = applications.filter(a => a.status === "accepted").length
@@ -345,7 +339,6 @@ function NGODashboard() {
     const getAcceptedWorkersForJob = (jobId: string) =>
         applications.filter(a => a.jobId === jobId && a.status === "accepted")
 
-    // FIX: Handle accept/reject with UI feedback
     const handleApplicationDecision = async (appId: string, decision: "accepted" | "rejected") => {
         setUpdatingAppId(appId)
         try {
@@ -399,7 +392,7 @@ function NGODashboard() {
                 ))}
             </div>
 
-            {/* ── FIX: Pending Applications Section ─────────────────────────────── */}
+            {/* Pending Applications */}
             <div className="mb-10">
                 <div className="flex items-center gap-3 mb-4">
                     <h2 className="text-lg font-bold text-foreground">Pending Applications</h2>
@@ -431,12 +424,8 @@ function NGODashboard() {
                                         Applied for: <span className="text-foreground font-medium">{app.jobTitle}</span>
                                     </p>
                                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1">
-                                            <Phone size={11} />{app.workerPhone}
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                            <MapPin size={11} />{app.workerLocation}
-                                        </span>
+                                        <span className="flex items-center gap-1"><Phone size={11} />{app.workerPhone}</span>
+                                        <span className="flex items-center gap-1"><MapPin size={11} />{app.workerLocation}</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
@@ -447,9 +436,7 @@ function NGODashboard() {
                                         disabled={updatingAppId === app.id}
                                         onClick={() => handleApplicationDecision(app.id, "rejected")}
                                     >
-                                        {updatingAppId === app.id
-                                            ? <Loader2 size={13} className="animate-spin" />
-                                            : "Reject"}
+                                        {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Reject"}
                                     </Button>
                                     <Button
                                         size="sm"
@@ -457,9 +444,7 @@ function NGODashboard() {
                                         disabled={updatingAppId === app.id}
                                         onClick={() => handleApplicationDecision(app.id, "accepted")}
                                     >
-                                        {updatingAppId === app.id
-                                            ? <Loader2 size={13} className="animate-spin" />
-                                            : "Accept"}
+                                        {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Accept"}
                                     </Button>
                                 </div>
                             </div>
@@ -503,13 +488,27 @@ function NGODashboard() {
                                                 <span className="flex items-center gap-1"><MapPin size={11} />{job.location}</span>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                                            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                                        >
-                                            <span>{expandedJob === job.id ? "Hide" : "View"} Workers</span>
-                                            <ChevronDown size={15} className={`transition-transform ${expandedJob === job.id ? "rotate-180" : ""}`} />
-                                        </button>
+
+                                        {/* Action buttons */}
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            {/* AI Applicants button */}
+                                            <button
+                                                onClick={() => setAiPanelJob(job)}
+                                                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/5 hover:bg-violet-500/15 transition-all"
+                                            >
+                                                <Sparkles size={12} />
+                                                AI Applicants
+                                            </button>
+
+                                            {/* View accepted workers toggle */}
+                                            <button
+                                                onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                                                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                            >
+                                                <span>{expandedJob === job.id ? "Hide" : "View"} Workers</span>
+                                                <ChevronDown size={15} className={`transition-transform ${expandedJob === job.id ? "rotate-180" : ""}`} />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {expandedJob === job.id && (
@@ -543,12 +542,24 @@ function NGODashboard() {
                 )}
             </div>
 
+            {/* Post Job Modal */}
             {showPostJob && (
                 <PostJobModal
                     ngoUid={currentUser!.uid}
                     ngoName={ngoName}
                     onClose={() => setShowPostJob(false)}
                     onJobPosted={loadData}
+                />
+            )}
+
+            {/* AI Applications Panel */}
+            {aiPanelJob && (
+                <AIApplicationsPanel
+                    jobId={aiPanelJob.id}
+                    jobTitle={aiPanelJob.title}
+                    isPremiumNGO={isPremiumNGO}
+                    onClose={() => setAiPanelJob(null)}
+                    onStatusChange={loadData}
                 />
             )}
         </div>
@@ -583,7 +594,8 @@ function WorkerDashboard() {
             ])
             setAvailableJobs(jobs)
             setMyApplications(apps)
-        } catch {
+        } catch (err) {
+            console.error("Worker loadData error:", err)
             showToast("Failed to load data", "error")
         } finally {
             setLoading(false)
@@ -592,7 +604,6 @@ function WorkerDashboard() {
 
     useEffect(() => { loadData() }, [currentUser])
 
-    // FIX: Clearly separate the three categories
     const activeApps = myApplications.filter(a => a.status === "accepted")
     const pendingApps = myApplications.filter(a => a.status === "pending")
     const appliedJobIds = new Set(myApplications.map(a => a.jobId))
@@ -668,7 +679,12 @@ function WorkerDashboard() {
                 ))}
             </div>
 
-            {/* ── FIX: Active Jobs Section ─────────────────────────────────────── */}
+            {/* AI Score Card */}
+            <div className="mb-8">
+                <WorkerScoreCard workerId={currentUser!.uid} />
+            </div>
+
+            {/* Active Jobs */}
             {activeApps.length > 0 && (
                 <div className="mb-8">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
@@ -705,7 +721,7 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* ── FIX: Pending Applications Section ────────────────────────────── */}
+            {/* Pending Applications */}
             {pendingApps.length > 0 && (
                 <div className="mb-8">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
@@ -730,9 +746,8 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* ── Available Jobs Section ────────────────────────────────────────── */}
+            {/* Available Jobs */}
             <div>
-                {/* Search + Filter */}
                 <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="relative flex-1 min-w-[200px]">
                         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
