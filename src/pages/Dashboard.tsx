@@ -1,6 +1,19 @@
 // src/pages/Dashboard.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Integrated AI scoring system:
+//   • NGO: "View Applicants (AI)" opens AIApplicationsPanel with ranked workers
+//   • Worker: WorkerScoreCard shows personal AI score + rank on dashboard
+//   • Pending applications section for NGO with accept/reject
+//   • Delete job modal for NGO
+//   • Survey Analysis navigation button
+//   • All original UI preserved exactly
+// FIXES:
+//   • Added missing imports: useNavigate, Trash2, BarChart2
+//   • DeleteJobModal properly wired up with jobToDelete state
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -9,7 +22,8 @@ import {
     Briefcase, Plus, Users, FileCheck, Upload,
     Filter, ChevronDown, X, Phone,
     MapPin, Clock, DollarSign, Building2, CheckCircle,
-    AlertCircle, Search, Loader2, Bell, Trash2,
+    AlertCircle, Search, Loader2, Bell, Sparkles,
+    Trash2, BarChart2,
 } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 import { useToast } from "../context/ToastContext"
@@ -22,8 +36,8 @@ import {
 } from "../lib/jobService"
 import { uploadProofFile } from "../lib/storageService"
 import type { WorkerProfile } from "../lib/authService"
-import { useNavigate } from "react-router-dom"
-import { BarChart2 } from "lucide-react"
+import AIApplicationsPanel from "../components/AIApplicationsPanel"
+import WorkerScoreCard from "../components/WorkerScoreCard"
 
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
 
@@ -354,8 +368,10 @@ function NGODashboard() {
     const [applications, setApplications] = useState<Application[]>([])
     const [loading, setLoading] = useState(true)
     const [updatingAppId, setUpdatingAppId] = useState<string | null>(null)
+    const [aiPanelJob, setAiPanelJob] = useState<Job | null>(null)
 
-    const ngoName = userProfile?.role === "ngo" ? userProfile.ngoName : ""
+    const ngoName = userProfile?.role === "ngo" ? (userProfile as { ngoName?: string }).ngoName ?? "" : ""
+    const isPremiumNGO = true
 
     const loadData = async () => {
         if (!currentUser) return
@@ -479,13 +495,15 @@ function NGODashboard() {
                                     <Button size="sm" variant="outline"
                                         className="rounded-full px-4 border-red-500/30 text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
                                         disabled={updatingAppId === app.id}
-                                        onClick={() => handleApplicationDecision(app.id, "rejected")}>
+                                        onClick={() => handleApplicationDecision(app.id, "rejected")}
+                                    >
                                         {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Reject"}
                                     </Button>
                                     <Button size="sm"
                                         className="rounded-full px-4 bg-green-600 hover:bg-green-700 text-white"
                                         disabled={updatingAppId === app.id}
-                                        onClick={() => handleApplicationDecision(app.id, "accepted")}>
+                                        onClick={() => handleApplicationDecision(app.id, "accepted")}
+                                    >
                                         {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Accept"}
                                     </Button>
                                 </div>
@@ -531,24 +549,27 @@ function NGODashboard() {
                                             </div>
                                         </div>
 
-                                        {/* Actions */}
-                                        <div className="flex items-center gap-1 flex-shrink-0">
-                                            {/* 🗑 Delete button */}
+                                        {/* Action buttons */}
+                                        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                                             <button
-                                                onClick={() => setJobToDelete(job)}
-                                                title="Delete job"
-                                                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                                onClick={() => setAiPanelJob(job)}
+                                                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/5 hover:bg-violet-500/15 transition-all"
                                             >
-                                                <Trash2 size={15} />
+                                                <Sparkles size={12} />
+                                                AI Applicants
                                             </button>
-
-                                            {/* View workers toggle */}
                                             <button
                                                 onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                                                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors ml-1"
+                                                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                                             >
                                                 <span>{expandedJob === job.id ? "Hide" : "View"} Workers</span>
                                                 <ChevronDown size={15} className={`transition-transform ${expandedJob === job.id ? "rotate-180" : ""}`} />
+                                            </button>
+                                            <button
+                                                onClick={() => setJobToDelete(job)}
+                                                className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                            >
+                                                <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>
@@ -584,6 +605,7 @@ function NGODashboard() {
                 )}
             </div>
 
+            {/* Post Job Modal */}
             {showPostJob && (
                 <PostJobModal
                     ngoUid={currentUser!.uid}
@@ -593,12 +615,23 @@ function NGODashboard() {
                 />
             )}
 
-            {/* Delete confirmation modal */}
+            {/* Delete Job Modal */}
             {jobToDelete && (
                 <DeleteJobModal
                     job={jobToDelete}
                     onClose={() => setJobToDelete(null)}
                     onDeleted={loadData}
+                />
+            )}
+
+            {/* AI Applications Panel */}
+            {aiPanelJob && (
+                <AIApplicationsPanel
+                    jobId={aiPanelJob.id}
+                    jobTitle={aiPanelJob.title}
+                    isPremiumNGO={isPremiumNGO}
+                    onClose={() => setAiPanelJob(null)}
+                    onStatusChange={loadData}
                 />
             )}
         </div>
@@ -633,7 +666,8 @@ function WorkerDashboard() {
             ])
             setAvailableJobs(jobs)
             setMyApplications(apps)
-        } catch {
+        } catch (err) {
+            console.error("Worker loadData error:", err)
             showToast("Failed to load data", "error")
         } finally {
             setLoading(false)
@@ -715,6 +749,11 @@ function WorkerDashboard() {
                         <p className="text-xs text-muted-foreground mt-1">{label}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* AI Score Card */}
+            <div className="mb-8">
+                <WorkerScoreCard workerId={currentUser!.uid} />
             </div>
 
             {/* Active Jobs */}
