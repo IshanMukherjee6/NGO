@@ -9,7 +9,7 @@ import {
     Briefcase, Plus, Users, FileCheck, Upload,
     Filter, ChevronDown, X, Phone,
     MapPin, Clock, DollarSign, Building2, CheckCircle,
-    AlertCircle, Search, Loader2, Bell,
+    AlertCircle, Search, Loader2, Bell, Trash2,
 } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 import { useToast } from "../context/ToastContext"
@@ -17,6 +17,7 @@ import {
     fetchNGOJobs, fetchAllJobs, addJob,
     fetchNGOApplications, fetchWorkerApplications,
     applyForJob, submitProof, updateApplicationStatus,
+    deleteJob,
     type Job, type Application,
 } from "../lib/jobService"
 import { uploadProofFile } from "../lib/storageService"
@@ -115,7 +116,6 @@ function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted }: {
                         <X size={18} />
                     </button>
                 </div>
-
                 <div className="overflow-y-auto flex-1 px-7 py-6">
                     {submitted ? (
                         <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
@@ -174,6 +174,57 @@ function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted }: {
                             </Button>
                         </form>
                     )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ── Delete Confirm Modal ───────────────────────────────────────────────────────
+
+function DeleteJobModal({ job, onClose, onDeleted }: {
+    job: Job; onClose: () => void; onDeleted: () => void
+}) {
+    const { showToast } = useToast()
+    const [loading, setLoading] = useState(false)
+
+    const handleDelete = async () => {
+        setLoading(true)
+        try {
+            await deleteJob(job.id)
+            showToast("Job deleted successfully.", "success")
+            onDeleted()
+            onClose()
+        } catch {
+            showToast("Failed to delete job. Please try again.", "error")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-background border border-border rounded-3xl shadow-2xl w-full max-w-sm p-7">
+                <div className="flex flex-col items-center text-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
+                        <Trash2 size={24} className="text-red-500" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-foreground">Delete Job?</h2>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Are you sure you want to delete <span className="font-semibold text-foreground">"{job.title}"</span>? This cannot be undone.
+                        </p>
+                    </div>
+                    <div className="flex gap-3 w-full mt-2">
+                        <Button variant="outline" onClick={onClose} className="flex-1 rounded-full">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleDelete} disabled={loading}
+                            className="flex-1 rounded-full bg-red-600 hover:bg-red-700 text-white">
+                            {loading ? <Loader2 size={15} className="animate-spin" /> : "Delete"}
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -292,13 +343,13 @@ function UploadProofModal({
 // ── NGO Dashboard ──────────────────────────────────────────────────────────────
 
 function NGODashboard() {
-    // ✅ ALL hooks at the top — before any early returns
     const { currentUser, userProfile } = useAuth()
     const { showToast } = useToast()
-    const navigate = useNavigate()  // ✅ FIXED: moved up here from below the early return
+    const navigate = useNavigate()
 
     const [showPostJob, setShowPostJob] = useState(false)
     const [expandedJob, setExpandedJob] = useState<string | null>(null)
+    const [jobToDelete, setJobToDelete] = useState<Job | null>(null)
     const [jobs, setJobs] = useState<Job[]>([])
     const [applications, setApplications] = useState<Application[]>([])
     const [loading, setLoading] = useState(true)
@@ -349,7 +400,6 @@ function NGODashboard() {
         }
     }
 
-    // ✅ Early return is now AFTER all hooks
     if (loading) {
         return (
             <div className="flex items-center justify-center py-32">
@@ -367,17 +417,11 @@ function NGODashboard() {
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">{ngoName}</h1>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                    <Button
-                        variant="outline"
-                        onClick={() => navigate("/survey")}
-                        className="rounded-full px-5 gap-2 font-medium"
-                    >
+                    <Button variant="outline" onClick={() => navigate("/survey")}
+                        className="rounded-full px-5 gap-2 font-medium">
                         <BarChart2 size={15} /> Survey Analysis
                     </Button>
-                    <Button
-                        onClick={() => setShowPostJob(true)}
-                        className="rounded-full px-6 font-semibold gap-2"
-                    >
+                    <Button onClick={() => setShowPostJob(true)} className="rounded-full px-6 font-semibold gap-2">
                         <Plus size={16} /> Post a Job
                     </Button>
                 </div>
@@ -405,12 +449,10 @@ function NGODashboard() {
                     <h2 className="text-lg font-bold text-foreground">Pending Applications</h2>
                     {pendingApplications.length > 0 && (
                         <span className="flex items-center gap-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 text-xs font-semibold px-2.5 py-0.5 rounded-full">
-                            <Bell size={11} />
-                            {pendingApplications.length} new
+                            <Bell size={11} />{pendingApplications.length} new
                         </span>
                     )}
                 </div>
-
                 {pendingApplications.length === 0 ? (
                     <div className="bg-card border border-border rounded-2xl p-8 text-center">
                         <CheckCircle size={28} className="text-muted-foreground mx-auto mb-3" />
@@ -423,43 +465,28 @@ function NGODashboard() {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                                         <p className="font-semibold text-foreground">{app.workerName}</p>
-                                        <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-medium">
-                                            Pending
-                                        </span>
+                                        <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-medium">Pending</span>
                                     </div>
                                     <p className="text-sm text-muted-foreground mb-2">
                                         Applied for: <span className="text-foreground font-medium">{app.jobTitle}</span>
                                     </p>
                                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1">
-                                            <Phone size={11} />{app.workerPhone}
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                            <MapPin size={11} />{app.workerLocation}
-                                        </span>
+                                        <span className="flex items-center gap-1"><Phone size={11} />{app.workerPhone}</span>
+                                        <span className="flex items-center gap-1"><MapPin size={11} />{app.workerLocation}</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
+                                    <Button size="sm" variant="outline"
                                         className="rounded-full px-4 border-red-500/30 text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
                                         disabled={updatingAppId === app.id}
-                                        onClick={() => handleApplicationDecision(app.id, "rejected")}
-                                    >
-                                        {updatingAppId === app.id
-                                            ? <Loader2 size={13} className="animate-spin" />
-                                            : "Reject"}
+                                        onClick={() => handleApplicationDecision(app.id, "rejected")}>
+                                        {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Reject"}
                                     </Button>
-                                    <Button
-                                        size="sm"
+                                    <Button size="sm"
                                         className="rounded-full px-4 bg-green-600 hover:bg-green-700 text-white"
                                         disabled={updatingAppId === app.id}
-                                        onClick={() => handleApplicationDecision(app.id, "accepted")}
-                                    >
-                                        {updatingAppId === app.id
-                                            ? <Loader2 size={13} className="animate-spin" />
-                                            : "Accept"}
+                                        onClick={() => handleApplicationDecision(app.id, "accepted")}>
+                                        {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Accept"}
                                     </Button>
                                 </div>
                             </div>
@@ -503,13 +530,27 @@ function NGODashboard() {
                                                 <span className="flex items-center gap-1"><MapPin size={11} />{job.location}</span>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                                            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                                        >
-                                            <span>{expandedJob === job.id ? "Hide" : "View"} Workers</span>
-                                            <ChevronDown size={15} className={`transition-transform ${expandedJob === job.id ? "rotate-180" : ""}`} />
-                                        </button>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                            {/* 🗑 Delete button */}
+                                            <button
+                                                onClick={() => setJobToDelete(job)}
+                                                title="Delete job"
+                                                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+
+                                            {/* View workers toggle */}
+                                            <button
+                                                onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                                                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors ml-1"
+                                            >
+                                                <span>{expandedJob === job.id ? "Hide" : "View"} Workers</span>
+                                                <ChevronDown size={15} className={`transition-transform ${expandedJob === job.id ? "rotate-180" : ""}`} />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {expandedJob === job.id && (
@@ -527,9 +568,9 @@ function NGODashboard() {
                                                                     <MapPin size={10} />{w.workerLocation}
                                                                 </p>
                                                             </div>
-                                                            <div className="flex gap-3 text-xs text-muted-foreground">
-                                                                <span className="flex items-center gap-1"><Phone size={12} />{w.workerPhone}</span>
-                                                            </div>
+                                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                <Phone size={12} />{w.workerPhone}
+                                                            </span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -549,6 +590,15 @@ function NGODashboard() {
                     ngoName={ngoName}
                     onClose={() => setShowPostJob(false)}
                     onJobPosted={loadData}
+                />
+            )}
+
+            {/* Delete confirmation modal */}
+            {jobToDelete && (
+                <DeleteJobModal
+                    job={jobToDelete}
+                    onClose={() => setJobToDelete(null)}
+                    onDeleted={loadData}
                 />
             )}
         </div>
@@ -672,9 +722,7 @@ function WorkerDashboard() {
                 <div className="mb-8">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                         Active Jobs
-                        <span className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-2.5 py-0.5 rounded-full font-semibold">
-                            {activeApps.length}
-                        </span>
+                        <span className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-2.5 py-0.5 rounded-full font-semibold">{activeApps.length}</span>
                     </h2>
                     <div className="flex flex-col gap-3">
                         {activeApps.map(app => (
@@ -683,18 +731,12 @@ function WorkerDashboard() {
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
                                             <h3 className="font-semibold text-foreground">{app.jobTitle}</h3>
-                                            <span className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-2.5 py-0.5 rounded-full font-medium">
-                                                Accepted
-                                            </span>
+                                            <span className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-2.5 py-0.5 rounded-full font-medium">Accepted</span>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{app.ngoName}</p>
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setShowUpload(true)}
-                                        className="rounded-full gap-1.5 font-medium flex-shrink-0"
-                                    >
+                                    <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}
+                                        className="rounded-full gap-1.5 font-medium flex-shrink-0">
                                         <Upload size={13} /> Upload Proof
                                     </Button>
                                 </div>
@@ -709,18 +751,14 @@ function WorkerDashboard() {
                 <div className="mb-8">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                         Pending Applications
-                        <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-semibold">
-                            {pendingApps.length}
-                        </span>
+                        <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-semibold">{pendingApps.length}</span>
                     </h2>
                     <div className="flex flex-col gap-3">
                         {pendingApps.map(app => (
                             <div key={app.id} className="bg-card border border-border rounded-2xl p-5">
                                 <div className="flex items-center gap-2 mb-1">
                                     <h3 className="font-semibold text-foreground">{app.jobTitle}</h3>
-                                    <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-medium">
-                                        Awaiting Review
-                                    </span>
+                                    <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-medium">Awaiting Review</span>
                                 </div>
                                 <p className="text-sm text-muted-foreground">{app.ngoName}</p>
                             </div>
@@ -785,9 +823,7 @@ function WorkerDashboard() {
                         <AlertCircle size={32} className="text-muted-foreground" />
                         <p className="text-muted-foreground">No jobs match your filters.</p>
                         <button onClick={() => { setSearch(""); setFilters({ minSalary: "", experience: "" }) }}
-                            className="text-sm text-foreground font-semibold hover:underline">
-                            Clear all filters
-                        </button>
+                            className="text-sm text-foreground font-semibold hover:underline">Clear all filters</button>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
@@ -813,15 +849,9 @@ function WorkerDashboard() {
                                             <span className="text-xs bg-muted px-2.5 py-1 rounded-lg text-muted-foreground">{job.experience}</span>
                                         </div>
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        className="rounded-full px-5 flex-shrink-0 font-semibold"
-                                        disabled={applyingJobId === job.id}
-                                        onClick={() => handleApply(job)}
-                                    >
-                                        {applyingJobId === job.id
-                                            ? <Loader2 size={14} className="animate-spin" />
-                                            : "Apply"}
+                                    <Button size="sm" className="rounded-full px-5 flex-shrink-0 font-semibold"
+                                        disabled={applyingJobId === job.id} onClick={() => handleApply(job)}>
+                                        {applyingJobId === job.id ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
                                     </Button>
                                 </div>
                             </div>
