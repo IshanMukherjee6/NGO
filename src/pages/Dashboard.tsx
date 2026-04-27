@@ -7,9 +7,12 @@
 //   • Delete job modal for NGO
 //   • Survey Analysis navigation button
 //   • All original UI preserved exactly
-// FIXES:
-//   • Added missing imports: useNavigate, Trash2, BarChart2
-//   • DeleteJobModal properly wired up with jobToDelete state
+//
+// Worker filter enhancements (merged from v2):
+//   • Distance filter (Upto 10km / 10-20km / 20-30km / Beyond 30km)
+//   • Duration dropdown filter
+//   • Department dropdown filter
+//   • Location-distance logic uses workerProfile city/district/state
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react"
@@ -650,7 +653,13 @@ function WorkerDashboard() {
     const [showUpload, setShowUpload] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
     const [search, setSearch] = useState("")
-    const [filters, setFilters] = useState({ minSalary: "", experience: "" })
+    // Enhanced filters: added location (distance), duration, department
+    const [filters, setFilters] = useState({
+        minSalary: "",
+        location: "",
+        duration: "",
+        department: "",
+    })
     const [loading, setLoading] = useState(true)
     const [applyingJobId, setApplyingJobId] = useState<string | null>(null)
 
@@ -680,13 +689,34 @@ function WorkerDashboard() {
     const pendingApps = myApplications.filter(a => a.status === "pending")
     const appliedJobIds = new Set(myApplications.map(a => a.jobId))
 
+    // Location distance filter — best-effort string match against worker's city/district/state
+    const workerCity = workerProfile?.city?.toLowerCase() ?? ""
+    const workerDistrict = workerProfile?.district?.toLowerCase() ?? ""
+    const workerState = workerProfile?.state?.toLowerCase() ?? ""
+
     const filteredJobs = availableJobs.filter(job => {
         const matchSearch =
             job.title.toLowerCase().includes(search.toLowerCase()) ||
             job.department.toLowerCase().includes(search.toLowerCase())
         const matchSalary = !filters.minSalary || job.salaryNum >= parseInt(filters.minSalary)
-        const matchExp = !filters.experience || job.experience === filters.experience
-        return matchSearch && matchSalary && matchExp && !appliedJobIds.has(job.id)
+        const matchDuration = !filters.duration || job.duration === filters.duration
+        const matchDept = !filters.department || job.department === filters.department
+
+        let matchLocation = true
+        if (filters.location) {
+            const loc = job.location.toLowerCase()
+            if (filters.location === "upto10") {
+                matchLocation = workerCity !== "" && loc.includes(workerCity)
+            } else if (filters.location === "10to20") {
+                matchLocation = workerDistrict !== "" && loc.includes(workerDistrict) && !loc.includes(workerCity)
+            } else if (filters.location === "20to30") {
+                matchLocation = workerState !== "" && loc.includes(workerState) && !loc.includes(workerDistrict)
+            } else if (filters.location === "beyond30") {
+                matchLocation = !loc.includes(workerState)
+            }
+        }
+
+        return matchSearch && matchSalary && matchDuration && matchDept && matchLocation && !appliedJobIds.has(job.id)
     })
 
     const handleApply = async (job: Job) => {
@@ -818,36 +848,94 @@ function WorkerDashboard() {
                     <Button variant="outline" onClick={() => setShowFilters(!showFilters)}
                         className={`rounded-xl gap-2 font-medium ${showFilters ? "border-foreground" : ""}`}>
                         <Filter size={15} /> Filters
-                        {(filters.minSalary || filters.experience) && <span className="w-2 h-2 rounded-full bg-foreground" />}
+                        {(filters.minSalary || filters.location || filters.duration || filters.department) && (
+                            <span className="w-2 h-2 rounded-full bg-foreground" />
+                        )}
                     </Button>
                 </div>
 
                 {showFilters && (
-                    <div className="bg-card border border-border rounded-2xl p-5 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-card border border-border rounded-2xl p-5 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Min Salary */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min. Salary (₹)</label>
-                            <input type="number" min="0" value={filters.minSalary}
+                            <input
+                                type="number" min="0"
+                                value={filters.minSalary}
                                 onChange={e => setFilters(prev => ({ ...prev, minSalary: e.target.value }))}
-                                placeholder="e.g. 15000" className={inputCls} />
+                                placeholder="e.g. 15000"
+                                className={inputCls}
+                            />
                         </div>
+
+                        {/* Distance */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Experience</label>
-                            <Select value={filters.experience} onValueChange={v => setFilters(prev => ({ ...prev, experience: v === "any" ? "" : v }))}>
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Distance</label>
+                            <Select
+                                value={filters.location}
+                                onValueChange={v => setFilters(prev => ({ ...prev, location: v === "any" ? "" : v }))}
+                            >
                                 <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
-                                    <SelectValue placeholder="Any" />
+                                    <SelectValue placeholder="Any distance" />
                                 </SelectTrigger>
                                 <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
-                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any</SelectItem>
-                                    {["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"].map(e => (
-                                        <SelectItem key={e} value={e} className="rounded-lg text-sm cursor-pointer">{e}</SelectItem>
+                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any distance</SelectItem>
+                                    <SelectItem value="upto10" className="rounded-lg text-sm cursor-pointer">Upto 10 km</SelectItem>
+                                    <SelectItem value="10to20" className="rounded-lg text-sm cursor-pointer">10 – 20 km</SelectItem>
+                                    <SelectItem value="20to30" className="rounded-lg text-sm cursor-pointer">20 – 30 km</SelectItem>
+                                    <SelectItem value="beyond30" className="rounded-lg text-sm cursor-pointer">Beyond 30 km</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Duration */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration</label>
+                            <Select
+                                value={filters.duration}
+                                onValueChange={v => setFilters(prev => ({ ...prev, duration: v === "any" ? "" : v }))}
+                            >
+                                <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
+                                    <SelectValue placeholder="Any duration" />
+                                </SelectTrigger>
+                                <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
+                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any duration</SelectItem>
+                                    <SelectItem value="1 month" className="rounded-lg text-sm cursor-pointer">1 month</SelectItem>
+                                    <SelectItem value="2 months" className="rounded-lg text-sm cursor-pointer">2 months</SelectItem>
+                                    <SelectItem value="3 months" className="rounded-lg text-sm cursor-pointer">3 months</SelectItem>
+                                    <SelectItem value="6 months" className="rounded-lg text-sm cursor-pointer">6 months</SelectItem>
+                                    <SelectItem value="1 year" className="rounded-lg text-sm cursor-pointer">1 year</SelectItem>
+                                    <SelectItem value="Ongoing" className="rounded-lg text-sm cursor-pointer">Ongoing</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Department */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</label>
+                            <Select
+                                value={filters.department}
+                                onValueChange={v => setFilters(prev => ({ ...prev, department: v === "any" ? "" : v }))}
+                            >
+                                <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
+                                    <SelectValue placeholder="Any dept." />
+                                </SelectTrigger>
+                                <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
+                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any dept.</SelectItem>
+                                    {["Operations", "Health", "Training", "Admin", "Finance", "Research"].map(d => (
+                                        <SelectItem key={d} value={d} className="rounded-lg text-sm cursor-pointer">{d}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="flex items-end">
-                            <button onClick={() => setFilters({ minSalary: "", experience: "" })}
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                                Clear filters
+
+                        {/* Clear filters */}
+                        <div className="sm:col-span-2 lg:col-span-4 flex justify-end pt-1">
+                            <button
+                                onClick={() => setFilters({ minSalary: "", location: "", duration: "", department: "" })}
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                Clear all filters
                             </button>
                         </div>
                     </div>
@@ -861,8 +949,11 @@ function WorkerDashboard() {
                     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                         <AlertCircle size={32} className="text-muted-foreground" />
                         <p className="text-muted-foreground">No jobs match your filters.</p>
-                        <button onClick={() => { setSearch(""); setFilters({ minSalary: "", experience: "" }) }}
-                            className="text-sm text-foreground font-semibold hover:underline">Clear all filters</button>
+                        <button
+                            onClick={() => { setSearch(""); setFilters({ minSalary: "", location: "", duration: "", department: "" }) }}
+                            className="text-sm text-foreground font-semibold hover:underline">
+                            Clear all filters
+                        </button>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
