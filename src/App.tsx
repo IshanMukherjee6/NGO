@@ -31,6 +31,9 @@ import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import Jobs from "./pages/Jobs"
 
+import SurveyAnalysis from "./pages/SurveyAnalysis"
+import SurveyFolder from "./pages/SurveyFolder"
+
 // ── Hero slideshow data (unchanged from Project 1) ────────────────────────────
 
 const slides = [
@@ -130,6 +133,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          /> {/* ── NEW: Survey Analysis routes ─────────────────────────────── */}
+          <Route
+            path="/survey"
+            element={
+              <ProtectedRoute>
+                <SurveyAnalysis />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/survey/:folderId"
+            element={
+              <ProtectedRoute>
+                <SurveyFolder />
               </ProtectedRoute>
             }
           />
