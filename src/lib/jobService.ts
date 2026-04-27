@@ -1,42 +1,11 @@
 // src/lib/jobService.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Replaces Project 2's backend/routes/notes.js
-// All CRUD operations go directly to Firestore.
-// Firestore security rules (set in Firebase Console) enforce ownership —
-// analogous to the fetchuser middleware + ownership checks in notes.js.
-//
-// FIRESTORE SECURITY RULES to paste in Firebase Console → Firestore → Rules:
-//
-// rules_version = '2';
-// service cloud.firestore {
-//   match /databases/{database}/documents {
-//     match /users/{uid} {
-//       allow read, write: if request.auth.uid == uid;
-//     }
-//     match /jobs/{jobId} {
-//       allow read: if true;
-//       allow create: if request.auth != null
-//                       && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ngo';
-//       allow update, delete: if request.auth != null
-//                               && resource.data.postedBy == request.auth.uid;
-//     }
-//     match /applications/{appId} {
-//       allow create: if request.auth != null
-//                       && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'worker';
-//       allow read: if request.auth != null
-//                    && (resource.data.workerId == request.auth.uid
-//                        || resource.data.ngoId == request.auth.uid);
-//       allow update: if request.auth != null
-//                      && (resource.data.ngoId == request.auth.uid);
-//     }
-//     match /proofSubmissions/{proofId} {
-//       allow create: if request.auth != null;
-//       allow read, update: if request.auth != null
-//                             && (resource.data.workerId == request.auth.uid
-//                                 || resource.data.ngoId == request.auth.uid);
-//     }
-//   }
-// }
+// FIXES:
+//   • Removed orderBy() from all queries to avoid composite index errors.
+//     (Firestore requires composite indexes for where + orderBy combos.)
+//     Results are sorted client-side instead.
+//   • updateApplicationStatus() now reads app data BEFORE updating status
+//     to avoid reading stale data after the update.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -49,7 +18,6 @@ import {
     doc,
     query,
     where,
-    orderBy,
     serverTimestamp,
     type Timestamp,
 } from "firebase/firestore"
@@ -70,7 +38,7 @@ export interface Job {
     experience: string
     location: string
     status: "active" | "closed"
-    postedBy: string      // NGO uid
+    postedBy: string
     ngoName: string
     createdAt: Timestamp | null
 }
@@ -102,32 +70,38 @@ export interface ProofSubmission {
     submittedAt: Timestamp | null
 }
 
-// ── ROUTE 1 equivalent: Get all jobs (public, for worker browse) ──────────────
-// Mirrors GET /api/notes/fetchallnotes (scoped to current user)
-// For jobs: workers see ALL active jobs; NGOs see only their own.
+// ── Jobs ──────────────────────────────────────────────────────────────────────
 
 export async function fetchAllJobs(): Promise<Job[]> {
+    // FIX: Removed orderBy to avoid composite index requirement.
+    // Sorted client-side by createdAt descending.
     const q = query(
         collection(db, "jobs"),
-        where("status", "==", "active"),
-        orderBy("createdAt", "desc")
+        where("status", "==", "active")
     )
     const snap = await getDocs(q)
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job))
+    const jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job))
+    return jobs.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis() ?? 0
+        const bTime = b.createdAt?.toMillis() ?? 0
+        return bTime - aTime
+    })
 }
 
 export async function fetchNGOJobs(ngoUid: string): Promise<Job[]> {
+    // FIX: Removed orderBy, sorted client-side.
     const q = query(
         collection(db, "jobs"),
-        where("postedBy", "==", ngoUid),
-        orderBy("createdAt", "desc")
+        where("postedBy", "==", ngoUid)
     )
     const snap = await getDocs(q)
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job))
+    const jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job))
+    return jobs.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis() ?? 0
+        const bTime = b.createdAt?.toMillis() ?? 0
+        return bTime - aTime
+    })
 }
-
-// ── ROUTE 2 equivalent: Add a job ─────────────────────────────────────────────
-// Mirrors POST /api/notes/addnote
 
 export async function addJob(
     ngoUid: string,
@@ -155,18 +129,12 @@ export async function addJob(
     return ref.id
 }
 
-// ── ROUTE 3 equivalent: Update a job ─────────────────────────────────────────
-// Mirrors PUT /api/notes/updatenote/:id
-
 export async function updateJob(
     jobId: string,
     updates: Partial<Omit<Job, "id" | "postedBy" | "createdAt">>
 ): Promise<void> {
     await updateDoc(doc(db, "jobs", jobId), updates)
 }
-
-// ── ROUTE 4 equivalent: Delete a job ─────────────────────────────────────────
-// Mirrors DELETE /api/notes/deletenote/:id
 
 export async function deleteJob(jobId: string): Promise<void> {
     await deleteDoc(doc(db, "jobs", jobId))
@@ -194,33 +162,49 @@ export async function applyForJob(
 }
 
 export async function fetchWorkerApplications(workerUid: string): Promise<Application[]> {
+    // FIX: Removed orderBy, sorted client-side.
     const q = query(
         collection(db, "applications"),
-        where("workerId", "==", workerUid),
-        orderBy("appliedAt", "desc")
+        where("workerId", "==", workerUid)
     )
     const snap = await getDocs(q)
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Application))
+    const apps = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Application))
+    return apps.sort((a, b) => {
+        const aTime = a.appliedAt?.toMillis() ?? 0
+        const bTime = b.appliedAt?.toMillis() ?? 0
+        return bTime - aTime
+    })
 }
 
 export async function fetchNGOApplications(ngoUid: string): Promise<Application[]> {
+    // FIX: Removed orderBy, sorted client-side.
     const q = query(
         collection(db, "applications"),
-        where("ngoId", "==", ngoUid),
-        orderBy("appliedAt", "desc")
+        where("ngoId", "==", ngoUid)
     )
     const snap = await getDocs(q)
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Application))
+    const apps = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Application))
+    return apps.sort((a, b) => {
+        const aTime = a.appliedAt?.toMillis() ?? 0
+        const bTime = b.appliedAt?.toMillis() ?? 0
+        return bTime - aTime
+    })
 }
 
 export async function updateApplicationStatus(
     appId: string,
     status: "accepted" | "rejected"
 ): Promise<void> {
-    await updateDoc(doc(db, "applications", appId), { status })
-    // If accepted, increment job.filled
-    const appSnap = await getDoc(doc(db, "applications", appId))
-    if (appSnap.exists() && status === "accepted") {
+    // FIX: Read app data BEFORE updating so we have the jobId available.
+    const appRef = doc(db, "applications", appId)
+    const appSnap = await getDoc(appRef)
+
+    if (!appSnap.exists()) throw new Error("Application not found")
+
+    await updateDoc(appRef, { status })
+
+    // If accepted, increment job.filled and close job if full
+    if (status === "accepted") {
         const jobRef = doc(db, "jobs", appSnap.data().jobId)
         const jobSnap = await getDoc(jobRef)
         if (jobSnap.exists()) {
@@ -256,8 +240,7 @@ export async function submitProof(data: {
 export async function fetchWorkerProofs(workerUid: string): Promise<ProofSubmission[]> {
     const q = query(
         collection(db, "proofSubmissions"),
-        where("workerId", "==", workerUid),
-        orderBy("submittedAt", "desc")
+        where("workerId", "==", workerUid)
     )
     const snap = await getDocs(q)
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProofSubmission))
