@@ -293,6 +293,7 @@ export default function AIApplicationsPanel({
                         return (
                             <div
                                 key={application.id}
+<<<<<<< HEAD
                                 className={`rounded-2xl border transition-all ${
                                     application.status === "accepted"
                                         ? "border-emerald-500/30 bg-emerald-500/5"
@@ -300,6 +301,14 @@ export default function AIApplicationsPanel({
                                         ? "border-red-500/20 bg-red-500/5 opacity-60"
                                         : "border-border bg-card"
                                 }`}
+=======
+                                className={`rounded-2xl border transition-all ${application.status === "accepted"
+                                        ? "border-emerald-500/30 bg-emerald-500/5"
+                                        : application.status === "rejected"
+                                            ? "border-red-500/20 bg-red-500/5 opacity-60"
+                                            : "border-border bg-card"
+                                    }`}
+>>>>>>> 0a39e6e (Final hai ye- Work on this from tmrw)
                             >
                                 {/* Main Row */}
                                 <div className="p-4 flex items-center gap-4">
@@ -338,11 +347,18 @@ export default function AIApplicationsPanel({
 
                                             {/* Status badge */}
                                             {application.status !== "pending" && (
+<<<<<<< HEAD
                                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
                                                     application.status === "accepted"
                                                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                                         : "bg-red-500/10 text-red-400 border-red-500/20"
                                                 }`}>
+=======
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${application.status === "accepted"
+                                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                                        : "bg-red-500/10 text-red-400 border-red-500/20"
+                                                    }`}>
+>>>>>>> 0a39e6e (Final hai ye- Work on this from tmrw)
                                                     {application.status}
                                                 </span>
                                             )}
@@ -428,10 +444,17 @@ export default function AIApplicationsPanel({
                                         <div className="flex flex-col gap-2.5">
                                             {[
                                                 { label: "Location Match", value: score!.breakdown?.locationScore ?? 0, max: 25 },
+<<<<<<< HEAD
                                                 { label: "Liability",      value: score!.breakdown?.liabilityScore ?? 0, max: 25 },
                                                 { label: "Skill Match",    value: score!.breakdown?.skillScore ?? 0,     max: 20 },
                                                 { label: "Past Rating",    value: score!.breakdown?.ratingScore ?? 0,    max: 20 },
                                                 { label: "Reliability",    value: score!.breakdown?.reliabilityScore ?? 0, max: 10 },
+=======
+                                                { label: "Liability", value: score!.breakdown?.liabilityScore ?? 0, max: 25 },
+                                                { label: "Skill Match", value: score!.breakdown?.skillScore ?? 0, max: 20 },
+                                                { label: "Past Rating", value: score!.breakdown?.ratingScore ?? 0, max: 20 },
+                                                { label: "Reliability", value: score!.breakdown?.reliabilityScore ?? 0, max: 10 },
+>>>>>>> 0a39e6e (Final hai ye- Work on this from tmrw)
                                             ].map(({ label, value, max }) => (
                                                 <div key={label} className="flex items-center gap-3">
                                                     <span className="text-xs text-muted-foreground w-28 flex-shrink-0">{label}</span>

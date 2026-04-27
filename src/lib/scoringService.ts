@@ -396,12 +396,12 @@ export async function rateWorkerAfterJob(input: WorkerRatingInput): Promise<void
     if (input.flagged && input.flagReason) {
         const severity =
             input.flagReason.toLowerCase().includes("criminal") ||
-            input.flagReason.toLowerCase().includes("violence")
+                input.flagReason.toLowerCase().includes("violence")
                 ? "severe"
                 : input.flagReason.toLowerCase().includes("fraud") ||
-                  input.flagReason.toLowerCase().includes("abandon")
-                ? "moderate"
-                : "minor"
+                    input.flagReason.toLowerCase().includes("abandon")
+                    ? "moderate"
+                    : "minor"
 
         await addDoc(collection(db, "workerFlags"), {
             workerId: input.workerId,

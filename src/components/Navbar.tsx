@@ -1,8 +1,4 @@
 // src/components/Navbar.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Project 1's Navbar — kept visually identical.
-// Added: auth-aware state (shows user name + logout when logged in).
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -45,11 +41,12 @@ export default function Navbar() {
 
             {/* Logo */}
             <Link to="/" className="flex items-center gap-3 group select-none">
-                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-                    <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
-                        <circle cx="9" cy="6.5" r="3" fill="#111827" />
-                        <path d="M2.5 15.5c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="#111827" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
+                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
+                    <img
+                        src="/logo.jpeg"
+                        alt="NGO Connect"
+                        className="w-full h-full object-cover"
+                    />
                 </div>
                 <span className="text-white font-bold text-[20px] tracking-tight">
                     NGO <span className="text-white/55 font-medium">Connect</span>
