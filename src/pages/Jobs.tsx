@@ -17,6 +17,7 @@ import { useAuth } from "../context/AuthContext"
 import { useToast } from "../context/ToastContext"
 import { fetchAllJobs, applyForJob, fetchWorkerApplications, type Job } from "../lib/jobService"
 import type { WorkerProfile } from "../lib/authService"
+import SalaryInput from "@/components/SalaryInput"
 
 const inputCls = "px-3.5 py-2 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
 
@@ -57,7 +58,52 @@ function LoginPrompt({ onClose }: { onClose: () => void }) {
 
 const DEPARTMENTS = ["Operations", "Health", "Training", "Admin", "Finance", "Research"]
 const EXPERIENCE_OPTIONS = ["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"]
+function FilterSelect({
+    label,
+    value,
+    onValueChange,
+    placeholder,
+    options,
+}: {
+    label: string
+    value: string
+    onValueChange: (val: string) => void
+    placeholder: string
+    options: { label: string; value: string }[]
+}) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {label}
+            </label>
 
+            <select
+                value={value}
+                onChange={(e) => onValueChange(e.target.value)}
+                className="
+                h-11
+                rounded-xl
+                border border-white/10
+                bg-[#222]/80
+                text-sm
+                px-3
+
+                hover:bg-[#2a2a2a]
+                focus:ring-2 focus:ring-white/20
+
+                transition-all
+                "
+            >
+                <option value="">{placeholder}</option>
+                {options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                        {o.label}
+                    </option>
+                ))}
+            </select>
+        </div>
+    )
+}
 export default function Jobs() {
     const navigate = useNavigate()
     const { currentUser, userProfile } = useAuth()
@@ -155,7 +201,20 @@ export default function Jobs() {
                         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <input value={search} onChange={e => setSearch(e.target.value)}
                             placeholder="Search by title, NGO, department or location..."
-                            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all" />
+                            className="
+                                        w-full pl-9 pr-4 py-2.5 rounded-xl
+
+                                        bg-[#222]/80
+                                        border border-white/10
+
+                                        text-sm text-foreground
+                                        placeholder:text-muted-foreground
+
+                                        hover:bg-[#2a2a2a]
+                                        focus:ring-2 focus:ring-white/20
+
+                                        transition-all
+" />
                     </div>
                     <Button variant="outline" onClick={() => setShowFilters(!showFilters)}
                         className={`rounded-xl gap-2 font-medium ${showFilters ? "border-foreground" : ""}`}>
@@ -166,39 +225,99 @@ export default function Jobs() {
 
                 {/* Filters panel — matches Dashboard exactly */}
                 {showFilters && (
-                    <div className="bg-card border border-border rounded-2xl p-5 mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div
+                        className="
+        bg-gradient-to-b from-[#1c1c1c] to-[#171717]
+        border border-white/10
+        rounded-2xl
+        p-5 mb-5
+
+        grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4
+
+        backdrop-blur-md
+        shadow-[0_8px_30px_rgba(0,0,0,0.6)]
+    "
+                    >
+                        {/* Salary */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min. Salary (₹)</label>
-                            <input type="number" min="0" value={filters.minSalary}
-                                onChange={e => setFilters(p => ({ ...p, minSalary: e.target.value }))}
-                                placeholder="e.g. 15000" className={inputCls} />
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Min. Salary (₹)
+                            </label>
+
+                            <SalaryInput
+                                value={filters.minSalary}
+                                onChange={(val) =>
+                                    setFilters((p) => ({ ...p, minSalary: val }))
+                                }
+                            />
                         </div>
+
+                        {/* Experience */}
+                        <FilterSelect
+                            label="Experience"
+                            value={filters.experience}
+                            onValueChange={(v) =>
+                                setFilters((p) => ({ ...p, experience: v }))
+                            }
+                            placeholder="Any experience"
+                            options={EXPERIENCE_OPTIONS.map((e) => ({
+                                label: e,
+                                value: e,
+                            }))}
+                        />
+
+                        {/* Department */}
+                        <FilterSelect
+                            label="Department"
+                            value={filters.department}
+                            onValueChange={(v) =>
+                                setFilters((p) => ({ ...p, department: v }))
+                            }
+                            placeholder="Any department"
+                            options={DEPARTMENTS.map((d) => ({
+                                label: d,
+                                value: d,
+                            }))}
+                        />
+
+                        {/* Location */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Experience</label>
-                            <select value={filters.experience}
-                                onChange={e => setFilters(p => ({ ...p, experience: e.target.value }))}
-                                className={`${inputCls} appearance-none cursor-pointer`}>
-                                <option value="">Any</option>
-                                {EXPERIENCE_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                            </select>
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Location
+                            </label>
+
+                            <input
+                                value={filters.location}
+                                onChange={(e) =>
+                                    setFilters((p) => ({
+                                        ...p,
+                                        location: e.target.value,
+                                    }))
+                                }
+                                placeholder="e.g. Mumbai"
+                                className="
+                h-11 px-3 rounded-xl
+
+                bg-[#222]/80
+                border border-white/10
+
+                text-sm text-foreground
+                placeholder:text-muted-foreground
+
+                hover:bg-[#2a2a2a]
+                focus:ring-2 focus:ring-white/20
+
+                transition-all
+                "
+                            />
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</label>
-                            <select value={filters.department}
-                                onChange={e => setFilters(p => ({ ...p, department: e.target.value }))}
-                                className={`${inputCls} appearance-none cursor-pointer`}>
-                                <option value="">Any</option>
-                                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</label>
-                            <input value={filters.location}
-                                onChange={e => setFilters(p => ({ ...p, location: e.target.value }))}
-                                placeholder="e.g. Mumbai" className={inputCls} />
-                        </div>
-                        <div className="flex items-end sm:col-span-2 lg:col-span-4">
-                            <button onClick={clearFilters} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+
+                        {/* Clear */}
+                        <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
+                            <button
+                                onClick={clearFilters}
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                            >
                                 Clear all filters
                             </button>
                         </div>
@@ -227,7 +346,8 @@ export default function Jobs() {
                                 {filteredJobs.map(job => {
                                     const applied = appliedJobIds.has(job.id)
                                     return (
-                                        <div key={job.id} className="bg-card border border-border rounded-2xl p-5 hover:shadow-sm transition-shadow">
+                                        <div key={job.id} className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-5 hover:border-white/20 hover:shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:scale-[1.01]
+                                        transition-all duration-300">
                                             <div className="flex items-start justify-between gap-4">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 flex-wrap mb-1">

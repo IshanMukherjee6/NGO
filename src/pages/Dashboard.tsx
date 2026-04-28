@@ -26,7 +26,12 @@ import type { WorkerProfile, NGOProfile } from "../lib/authService"
 import AIApplicationsPanel from "../components/AIApplicationsPanel"
 import WorkerScoreCard from "../components/WorkerScoreCard"
 
+import SalaryInput from "@/components/SalaryInput"
+
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+
+// Number input with black arrows
+const numberInputCls = `${inputCls} [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:cursor-pointer [&::-webkit-outer-spin-button]:opacity-100 [appearance:textfield] [&::-webkit-inner-spin-button]:[filter:invert(1)] [&::-webkit-outer-spin-button]:[filter:invert(1)]`
 
 function Label({ children }: { children: React.ReactNode }) {
     return <label className="text-sm font-medium text-foreground">{children} <span className="text-red-500">*</span></label>
@@ -45,6 +50,102 @@ function SelectField({ label, value, onValueChange, placeholder, options }: {
                 <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground">
                     {options.map(o => (
                         <SelectItem key={o} value={o} className="rounded-lg text-sm cursor-pointer focus:bg-accent">{o}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+    )
+}
+
+// ── Filter Select — dark styled like the screenshot ───────────────────────────
+function FilterSelect({
+    label,
+    value,
+    onValueChange,
+    placeholder,
+    options,
+}: {
+    label: string
+    value: string
+    onValueChange: (val: string) => void
+    placeholder: string
+    options: { label: string; value: string }[]
+}) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {label}
+            </label>
+
+            <Select
+                value={value}
+                onValueChange={(v) => onValueChange(v === "__any__" ? "" : v)}
+            >
+                <SelectTrigger
+                    className="
+          h-11
+          rounded-xl
+          border border-white/10
+          bg-[#222]/80
+          text-sm
+          px-3
+
+          hover:bg-[#2a2a2a]
+          focus:ring-2 focus:ring-white/20
+
+          transition-all duration-200
+        "
+                >
+                    <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+
+                <SelectContent
+                    className="
+          rounded-xl
+          border border-white/10
+          bg-[#1c1c1c]
+          backdrop-blur-xl
+          shadow-[0_10px_40px_rgba(0,0,0,0.8)]
+
+          p-2
+          max-h-64
+          overflow-y-auto
+        "
+                >
+                    <SelectItem
+                        value="__any__"
+                        className="
+              px-3 py-2.5
+              rounded-lg
+              text-sm
+              text-muted-foreground
+              hover:bg-white/5
+              focus:bg-white/5
+            "
+                    >
+                        {placeholder}
+                    </SelectItem>
+
+                    {options.map((o) => (
+                        <SelectItem
+                            key={o.value}
+                            value={o.value}
+                            className="
+                px-3 py-2.5
+                rounded-lg
+                text-sm
+
+                hover:bg-white/10
+                focus:bg-white/10
+
+                data-[state=checked]:bg-white
+                data-[state=checked]:text-black
+
+                transition-all duration-150
+              "
+                        >
+                            {o.label}
+                        </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
@@ -134,7 +235,7 @@ function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted, prefill }: {
                                 <input value={form.title} onChange={e => setField("title", e.target.value)} required placeholder="e.g. Field Survey Associate" className={inputCls} />
                             </div>
                             <SelectField label="Department" value={form.department} onValueChange={v => setField("department", v)} placeholder="Select Department"
-                                options={["Operations","Health","Training","Admin","Finance","Research"]} />
+                                options={["Operations", "Health", "Training", "Admin", "Finance", "Research"]} />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1.5">
                                     <Label>No. of Positions</Label>
@@ -147,12 +248,12 @@ function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted, prefill }: {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <SelectField label="Education" value={form.education} onValueChange={v => setField("education", v)} placeholder="Select"
-                                    options={["8th Pass","10th Pass","12th Pass","Graduate","Post Graduate"]} />
+                                    options={["8th Pass", "10th Pass", "12th Pass", "Graduate", "Post Graduate"]} />
                                 <SelectField label="Experience" value={form.experience} onValueChange={v => setField("experience", v)} placeholder="Select"
-                                    options={["Fresher","0-1 years","1-2 years","2-3 years","3-5 years","5+ years"]} />
+                                    options={["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"]} />
                             </div>
                             <SelectField label="Duration" value={form.duration} onValueChange={v => setField("duration", v)} placeholder="Select Duration"
-                                options={["1 month","2 months","3 months","6 months","1 year","Ongoing"]} />
+                                options={["1 month", "2 months", "3 months", "6 months", "1 year", "Ongoing"]} />
                             <div className="flex flex-col gap-1.5">
                                 <Label>Location</Label>
                                 <input value={form.location} onChange={e => setField("location", e.target.value)} required placeholder="e.g. Pune, Maharashtra" className={inputCls} />
@@ -329,10 +430,7 @@ function NGODashboard() {
     const loadData = async () => {
         if (!currentUser) return
         try {
-            const [j, a] = await Promise.all([
-                fetchNGOJobs(currentUser.uid),
-                fetchNGOApplications(currentUser.uid),
-            ])
+            const [j, a] = await Promise.all([fetchNGOJobs(currentUser.uid), fetchNGOApplications(currentUser.uid)])
             setJobs(j)
             setApplications(a)
         } catch {
@@ -368,22 +466,15 @@ function NGODashboard() {
         }
     }
 
-    if (loading) {
-        return <div className="flex items-center justify-center py-32"><Loader2 size={28} className="animate-spin text-muted-foreground" /></div>
-    }
+    if (loading) return <div className="flex items-center justify-center py-32"><Loader2 size={28} className="animate-spin text-muted-foreground" /></div>
 
     return (
         <div className="max-w-5xl mx-auto px-6 md:px-10 py-10">
-            {/* Header */}
             <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">{ngoName}</h1>
-                    {ngoEmail && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Mail size={11} />{ngoEmail}
-                        </p>
-                    )}
+                    {ngoEmail && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><Mail size={11} />{ngoEmail}</p>}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" onClick={() => navigate("/survey")} className="rounded-full px-5 gap-2 font-medium">
@@ -395,7 +486,6 @@ function NGODashboard() {
                 </div>
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                 {[
                     { icon: Briefcase, label: "Active Jobs", value: String(activeJobs) },
@@ -411,7 +501,6 @@ function NGODashboard() {
                 ))}
             </div>
 
-            {/* Pending Applications */}
             <div className="mb-10">
                 <div className="flex items-center gap-3 mb-4">
                     <h2 className="text-lg font-bold text-foreground">Pending Applications</h2>
@@ -435,9 +524,7 @@ function NGODashboard() {
                                         <p className="font-semibold text-foreground">{app.workerName}</p>
                                         <span className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-medium">Pending</span>
                                     </div>
-                                    <p className="text-sm text-muted-foreground mb-2">
-                                        Applied for: <span className="text-foreground font-medium">{app.jobTitle}</span>
-                                    </p>
+                                    <p className="text-sm text-muted-foreground mb-2">Applied for: <span className="text-foreground font-medium">{app.jobTitle}</span></p>
                                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Phone size={11} />{app.workerPhone}</span>
                                         {(app as Application & { workerEmail?: string }).workerEmail && (
@@ -447,8 +534,7 @@ function NGODashboard() {
                                     </div>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
-                                    <Button size="sm" variant="outline"
-                                        className="rounded-full px-4 border-red-500/30 text-red-500 hover:bg-red-500/10"
+                                    <Button size="sm" variant="outline" className="rounded-full px-4 border-red-500/30 text-red-500 hover:bg-red-500/10"
                                         disabled={updatingAppId === app.id}
                                         onClick={() => handleApplicationDecision(app.id, "rejected", app.workerName, app.jobTitle)}>
                                         {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Reject"}
@@ -465,16 +551,13 @@ function NGODashboard() {
                 )}
             </div>
 
-            {/* Posted Jobs */}
             <div>
                 <h2 className="text-lg font-bold text-foreground mb-4">Posted Jobs</h2>
                 {jobs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                         <Briefcase size={32} className="text-muted-foreground" />
                         <p className="text-muted-foreground">No jobs posted yet.</p>
-                        <Button onClick={() => setShowPostJob(true)} className="rounded-full px-6 gap-2 mt-1">
-                            <Plus size={15} /> Post your first job
-                        </Button>
+                        <Button onClick={() => setShowPostJob(true)} className="rounded-full px-6 gap-2 mt-1"><Plus size={15} /> Post your first job</Button>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
@@ -525,18 +608,12 @@ function NGODashboard() {
                                                         <div key={w.id} className="flex items-center justify-between bg-background rounded-xl px-4 py-3 border border-border">
                                                             <div>
                                                                 <p className="font-medium text-sm text-foreground">{w.workerName}</p>
-                                                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                                    <MapPin size={10} />{w.workerLocation}
-                                                                </p>
+                                                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MapPin size={10} />{w.workerLocation}</p>
                                                             </div>
                                                             <div className="flex flex-col items-end gap-1">
-                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                                    <Phone size={12} />{w.workerPhone}
-                                                                </span>
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={12} />{w.workerPhone}</span>
                                                                 {(w as Application & { workerEmail?: string }).workerEmail && (
-                                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                                        <Mail size={12} />{(w as Application & { workerEmail?: string }).workerEmail}
-                                                                    </span>
+                                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground"><Mail size={12} />{(w as Application & { workerEmail?: string }).workerEmail}</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -552,9 +629,7 @@ function NGODashboard() {
                 )}
             </div>
 
-            {showPostJob && (
-                <PostJobModal ngoUid={currentUser!.uid} ngoName={ngoName} onClose={() => setShowPostJob(false)} onJobPosted={loadData} prefill={postJobPrefill} />
-            )}
+            {showPostJob && <PostJobModal ngoUid={currentUser!.uid} ngoName={ngoName} onClose={() => setShowPostJob(false)} onJobPosted={loadData} prefill={postJobPrefill} />}
             {jobToDelete && <DeleteJobModal job={jobToDelete} onClose={() => setJobToDelete(null)} onDeleted={loadData} />}
             {aiPanelJob && (
                 <AIApplicationsPanel jobId={aiPanelJob.id} jobTitle={aiPanelJob.title} isPremiumNGO={isPremiumNGO}
@@ -575,12 +650,21 @@ function WorkerDashboard() {
     const [showUpload, setShowUpload] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
     const [search, setSearch] = useState("")
-    const [filters, setFilters] = useState({ minSalary: "", experience: "", department: "", location: "" })
+    const [filters, setFilters] = useState({ minSalary: "", distance: "", duration: "", department: "" })
     const [loading, setLoading] = useState(true)
     const [applyingJobId, setApplyingJobId] = useState<string | null>(null)
 
     const workerProfile = userProfile?.role === "worker" ? userProfile as WorkerProfile : null
     const displayName = workerProfile?.fullName || "Worker"
+
+    const DEPARTMENTS = ["Operations", "Health", "Training", "Admin", "Finance", "Research"]
+    const DURATIONS = ["1 month", "2 months", "3 months", "6 months", "1 year", "Ongoing"]
+    const DISTANCE_OPTIONS = [
+        { label: "Upto 10 km", value: "upto10" },
+        { label: "10 – 20 km", value: "10-20" },
+        { label: "20 – 30 km", value: "20-30" },
+        { label: "Beyond 30 km", value: "beyond30" },
+    ]
 
     const loadData = async () => {
         if (!currentUser) return
@@ -597,20 +681,9 @@ function WorkerDashboard() {
 
     useEffect(() => { loadData() }, [currentUser])
 
-    // Alert workers when a new acceptance comes in (compare previous state)
-    useEffect(() => {
-        const accepted = myApplications.filter(a => a.status === "accepted")
-        if (accepted.length > 0) {
-            // We just store this — toast on first load would be noisy; it's shown when decision happens
-        }
-    }, [myApplications])
-
     const activeApps = myApplications.filter(a => a.status === "accepted")
     const pendingApps = myApplications.filter(a => a.status === "pending")
     const appliedJobIds = new Set(myApplications.map(a => a.jobId))
-
-    const DEPARTMENTS = ["Operations","Health","Training","Admin","Finance","Research"]
-    const EXPERIENCE_OPTIONS = ["Fresher","0-1 years","1-2 years","2-3 years","3-5 years","5+ years"]
 
     const filteredJobs = availableJobs.filter(job => {
         const matchSearch =
@@ -618,10 +691,10 @@ function WorkerDashboard() {
             job.department.toLowerCase().includes(search.toLowerCase()) ||
             job.location.toLowerCase().includes(search.toLowerCase())
         const matchSalary = !filters.minSalary || job.salaryNum >= parseInt(filters.minSalary)
-        const matchExp = !filters.experience || job.experience === filters.experience
+        const matchDuration = !filters.duration || job.duration === filters.duration
         const matchDept = !filters.department || job.department === filters.department
-        const matchLoc = !filters.location || job.location.toLowerCase().includes(filters.location.toLowerCase())
-        return matchSearch && matchSalary && matchExp && matchDept && matchLoc && !appliedJobIds.has(job.id)
+        const matchDistance = !filters.distance
+        return matchSearch && matchSalary && matchDuration && matchDept && matchDistance && !appliedJobIds.has(job.id)
     })
 
     const handleApply = async (job: Job) => {
@@ -630,13 +703,7 @@ function WorkerDashboard() {
         try {
             await applyForJob(
                 { id: job.id, title: job.title, postedBy: job.postedBy, ngoName: job.ngoName },
-                {
-                    uid: currentUser.uid,
-                    fullName: workerProfile.fullName,
-                    phone: workerProfile.phone,
-                    email: workerProfile.email,
-                    location: `${workerProfile.city}, ${workerProfile.state}`,
-                }
+                { uid: currentUser.uid, fullName: workerProfile.fullName, phone: workerProfile.phone, email: workerProfile.email, location: `${workerProfile.city}, ${workerProfile.state}` }
             )
             showToast(`Applied for "${job.title}" successfully!`, "success")
             await loadData()
@@ -650,6 +717,7 @@ function WorkerDashboard() {
     if (loading) return <div className="flex items-center justify-center py-32"><Loader2 size={28} className="animate-spin text-muted-foreground" /></div>
 
     const hasActiveFilters = Object.values(filters).some(v => v !== "")
+    const clearFilters = () => setFilters({ minSalary: "", distance: "", duration: "", department: "" })
 
     return (
         <div className="max-w-5xl mx-auto px-6 md:px-10 py-10">
@@ -658,19 +726,11 @@ function WorkerDashboard() {
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
-                    {workerProfile?.email && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Mail size={11} />{workerProfile.email}
-                        </p>
-                    )}
+                    {workerProfile?.email && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><Mail size={11} />{workerProfile.email}</p>}
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                    <Button variant="outline" onClick={() => setShowUpload(true)} className="rounded-full gap-2 font-medium">
-                        <Upload size={15} /> Upload Proof
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowApplicationsModal(true)} className="rounded-full gap-2 font-medium">
-                        <CheckCircle size={15} /> My Applications
-                    </Button>
+                    <Button variant="outline" onClick={() => setShowUpload(true)} className="rounded-full gap-2 font-medium"><Upload size={15} /> Upload Proof</Button>
+                    <Button variant="outline" onClick={() => setShowApplicationsModal(true)} className="rounded-full gap-2 font-medium"><CheckCircle size={15} /> My Applications</Button>
                 </div>
             </div>
 
@@ -689,9 +749,7 @@ function WorkerDashboard() {
             </div>
 
             {/* AI Score Card */}
-            <div className="mb-8">
-                <WorkerScoreCard workerId={currentUser!.uid} />
-            </div>
+            <div className="mb-8"><WorkerScoreCard workerId={currentUser!.uid} /></div>
 
             {/* Active Jobs */}
             {activeApps.length > 0 && (
@@ -742,14 +800,29 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* Available Jobs with Filters matching Jobs page */}
+            {/* Available Jobs */}
             <div>
                 <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="relative flex-1 min-w-[200px]">
                         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <input value={search} onChange={e => setSearch(e.target.value)}
                             placeholder="Search jobs by title, department or location..."
-                            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all" />
+                            className="
+  w-full
+  pl-9 pr-4 py-2.5
+  rounded-xl
+
+  bg-[#222]/80
+  border border-white/10
+
+  text-sm text-foreground
+  placeholder:text-muted-foreground
+
+  hover:bg-[#2a2a2a]
+  focus:ring-2 focus:ring-white/20
+
+  transition-all
+" />
                     </div>
                     <Button variant="outline" onClick={() => setShowFilters(!showFilters)}
                         className={`rounded-xl gap-2 font-medium ${showFilters ? "border-foreground" : ""}`}>
@@ -758,41 +831,54 @@ function WorkerDashboard() {
                     </Button>
                 </div>
 
+                {/* ── Filter Panel ── */}
                 {showFilters && (
-                    <div className="bg-card border border-border rounded-2xl p-5 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-b from-[#1c1c1c] to-[#171717] border border-white/10 rounded-2xl p-5 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4
+                    backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.6)] ">
+
+                        {/* Min Salary — number input with black arrows via inline style */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min. Salary (₹)</label>
-                            <input type="number" min="0" value={filters.minSalary}
-                                onChange={e => setFilters(prev => ({ ...prev, minSalary: e.target.value }))}
-                                placeholder="e.g. 15000" className={inputCls} />
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Min. Salary (₹)
+                            </label>
+
+                            <SalaryInput
+                                value={filters.minSalary}
+                                onChange={(val) =>
+                                    setFilters(prev => ({ ...prev, minSalary: val }))
+                                }
+                            />
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Experience</label>
-                            <select value={filters.experience}
-                                onChange={e => setFilters(prev => ({ ...prev, experience: e.target.value }))}
-                                className={`${inputCls} appearance-none cursor-pointer`}>
-                                <option value="">Any</option>
-                                {EXPERIENCE_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                            </select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</label>
-                            <select value={filters.department}
-                                onChange={e => setFilters(prev => ({ ...prev, department: e.target.value }))}
-                                className={`${inputCls} appearance-none cursor-pointer`}>
-                                <option value="">Any</option>
-                                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</label>
-                            <input value={filters.location}
-                                onChange={e => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                                placeholder="e.g. Mumbai" className={inputCls} />
-                        </div>
+
+                        {/* Distance — shadcn Select */}
+                        <FilterSelect
+                            label="Distance"
+                            value={filters.distance}
+                            onValueChange={v => setFilters(prev => ({ ...prev, distance: v }))}
+                            placeholder="Any distance"
+                            options={DISTANCE_OPTIONS}
+                        />
+
+                        {/* Duration — shadcn Select */}
+                        <FilterSelect
+                            label="Duration"
+                            value={filters.duration}
+                            onValueChange={v => setFilters(prev => ({ ...prev, duration: v }))}
+                            placeholder="Any duration"
+                            options={DURATIONS.map(d => ({ label: d, value: d }))}
+                        />
+
+                        {/* Department — shadcn Select */}
+                        <FilterSelect
+                            label="Department"
+                            value={filters.department}
+                            onValueChange={v => setFilters(prev => ({ ...prev, department: v }))}
+                            placeholder="Any department"
+                            options={DEPARTMENTS.map(d => ({ label: d, value: d }))}
+                        />
+
                         <div className="sm:col-span-2 lg:col-span-4 flex justify-end pt-1">
-                            <button onClick={() => setFilters({ minSalary: "", experience: "", department: "", location: "" })}
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={clearFilters} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                                 Clear all filters
                             </button>
                         </div>
@@ -807,20 +893,17 @@ function WorkerDashboard() {
                     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                         <AlertCircle size={32} className="text-muted-foreground" />
                         <p className="text-muted-foreground">No jobs match your filters.</p>
-                        <button onClick={() => { setSearch(""); setFilters({ minSalary: "", experience: "", department: "", location: "" }) }}
-                            className="text-sm text-foreground font-semibold hover:underline">Clear all filters</button>
+                        <button onClick={() => { setSearch(""); clearFilters() }} className="text-sm text-foreground font-semibold hover:underline">Clear all filters</button>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
                         {filteredJobs.map(job => (
-                            <div key={job.id} className="bg-card border border-border rounded-2xl p-5 hover:shadow-sm transition-shadow">
+                            <div key={job.id} className=" bg-[#1c1c1c] border border-white/10 rounded-2xl p-5 hover:border-white/20 hover:shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:scale-[1.01]  transition-all duration-300">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 flex-wrap mb-1">
                                             <h3 className="font-semibold text-foreground">{job.title}</h3>
-                                            <span className="text-xs px-2.5 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 font-medium">
-                                                {job.positions - job.filled} open
-                                            </span>
+                                            <span className="text-xs px-2.5 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 font-medium">{job.positions - job.filled} open</span>
                                         </div>
                                         <p className="text-sm text-muted-foreground mb-3">{job.ngoName}</p>
                                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -855,8 +938,7 @@ function WorkerDashboard() {
                                 <h2 className="text-xl font-bold text-foreground">My Applications</h2>
                                 <p className="text-sm text-muted-foreground mt-0.5">All your job applications</p>
                             </div>
-                            <button onClick={() => setShowApplicationsModal(false)}
-                                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                            <button onClick={() => setShowApplicationsModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                                 <X size={18} />
                             </button>
                         </div>
@@ -879,9 +961,7 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {showUpload && (
-                <UploadProofModal workerUid={currentUser!.uid} workerName={displayName} jobs={myApplications} onClose={() => setShowUpload(false)} />
-            )}
+            {showUpload && <UploadProofModal workerUid={currentUser!.uid} workerName={displayName} jobs={myApplications} onClose={() => setShowUpload(false)} />}
         </div>
     )
 }
