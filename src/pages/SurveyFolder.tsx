@@ -83,13 +83,35 @@ function StatusDropdown({
         <div ref={ref} className="relative inline-block">
             <button
                 onClick={() => setOpen(o => !o)}
-                className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+                type="button"
+                className="
+        flex items-center gap-2
+        px-3 py-1.5
+        rounded-lg
+        border border-border
+        bg-muted/40
+        hover:bg-muted
+        cursor-pointer
+        transition-all
+    "
             >
                 <StatusBadge status={current} />
-                <ChevronDown size={12} className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+                <ChevronDown
+                    size={14}
+                    className={`text-foreground opacity-70 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                />
             </button>
             {open && (
-                <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl overflow-hidden min-w-[140px]">
+                <div className="
+absolute top-full mt-2 left-0 z-[9999]
+bg-[#111] 
+border border-white/10
+rounded-xl
+shadow-[0_10px_30px_rgba(0,0,0,0.6)]
+min-w-[180px]
+p-1
+backdrop-blur-md
+">
                     {options.map(opt => (
                         <button
                             key={opt}
@@ -98,9 +120,19 @@ function StatusDropdown({
                                 onChange(opt)
                                 setOpen(false)
                             }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${opt === current ? "font-semibold" : ""}`}
+                            className={`
+w-full flex items-center justify-between
+px-3 py-2.5 text-sm rounded-lg
+hover:bg-muted transition-all
+${opt === current ? "bg-muted font-semibold" : ""}
+`}
                         >
-                            <StatusBadge status={opt} />
+                            <>
+                                <StatusBadge status={opt} />
+                                {opt === current && (
+                                    <CheckCircle size={14} className="text-green-500" />
+                                )}
+                            </>
                         </button>
                     ))}
                 </div>
@@ -488,7 +520,7 @@ export default function SurveyFolderPage() {
                         </Button>
                     </div>
                 ) : (
-                    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                    <div className="bg-card border border-border rounded-2xl ">
                         {/* Table header */}
                         <div className={`grid gap-4 px-5 py-3 bg-muted/40 border-b border-border ${isRanked ? "grid-cols-[2fr_1fr_0.6fr_2fr_80px]" : "grid-cols-[2fr_1fr_80px]"}`}>
                             {["Name", "Status", ...(isRanked ? ["Rank", "AI Reason"] : []), ""].map(h => (

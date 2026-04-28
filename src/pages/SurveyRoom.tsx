@@ -124,7 +124,7 @@ function UploadInterface({ folder }: { folder: SurveyFolder }) {
     useEffect(() => {
         fetchSurveyDocuments(folder.id)
             .then(setUploadedDocs)
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoadingDocs(false))
     }, [folder.id])
 

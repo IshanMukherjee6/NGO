@@ -178,11 +178,12 @@ export default function Login() {
         <div className="min-h-screen bg-background flex items-center justify-center px-4">
             <div className="w-full max-w-sm">
                 <Link to="/" className="flex items-center justify-center gap-2.5 mb-8 group select-none">
-                    <div className="w-9 h-9 rounded-xl bg-foreground flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                            <circle cx="9" cy="6.5" r="3" fill="white" />
-                            <path d="M2.5 15.5c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-                        </svg>
+                    <div className="w-9 h-9 rounded-xl overflow-hidden bg-white flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <img
+                            src="/logo.jpeg"
+                            alt="NGO Connect Logo"
+                            className="w-full h-full object-contain"
+                        />
                     </div>
                     <span className="font-bold text-[18px] tracking-tight text-foreground">
                         NGO <span className="text-muted-foreground font-medium">Connect</span>

@@ -20,7 +20,15 @@ import {
     FolderPlus, Folder, ChevronRight, X, Loader2,
     MapPin, Calendar, Hash, ArrowLeft,
 } from "lucide-react"
-
+import { STATES, getDistricts, getSubDistricts } from "../lib/indiaLocationData"
+import { INDIA_LOCATION_DATA } from "../lib/indiaLocationData"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 const inputCls =
     "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground " +
     "placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring " +
@@ -45,7 +53,16 @@ function CreateFolderModal({
         block: "",
         wardNo: "",
     })
+    const states = Object.keys(INDIA_LOCATION_DATA)
 
+    const districts = form.state
+        ? Object.keys(INDIA_LOCATION_DATA[form.state] || {})
+        : []
+
+    const subDistricts =
+        form.state && form.district
+            ? INDIA_LOCATION_DATA[form.state][form.district] || []
+            : []
     const setField = (k: string, v: string) =>
         setForm(prev => ({ ...prev, [k]: v }))
 
@@ -103,20 +120,110 @@ function CreateFolderModal({
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="px-7 py-6 flex flex-col gap-4">
-                    {fields.map(({ key, label, placeholder }) => (
-                        <div key={key} className="flex flex-col gap-1.5">
-                            <label className="text-sm font-medium text-foreground">
-                                {label} <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                value={form[key]}
-                                onChange={e => setField(key, e.target.value)}
-                                placeholder={placeholder}
-                                required
-                                className={inputCls}
-                            />
-                        </div>
-                    ))}
+                    {/* State */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-foreground">
+                            State <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                            value={form.state}
+                            onValueChange={(value) =>
+                                setForm({
+                                    ...form,
+                                    state: value,
+                                    district: "",
+                                    subDistrict: "",
+                                })
+                            }
+                        >
+                            <SelectTrigger className={inputCls}>
+                                <SelectValue placeholder="Select State" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {states.map((s) => (
+                                    <SelectItem key={s} value={s}>
+                                        {s}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* District */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-foreground">
+                            District <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                            value={form.district}
+                            onValueChange={(value) =>
+                                setForm({
+                                    ...form,
+                                    district: value,
+                                    subDistrict: "",
+                                })
+                            }
+                            disabled={!form.state}
+                        >
+                            <SelectTrigger className={inputCls}>
+                                <SelectValue placeholder="Select District" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {districts.map((d) => (
+                                    <SelectItem key={d} value={d}>
+                                        {d}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Sub-district */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-foreground">
+                            Sub-district <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                            value={form.subDistrict}
+                            onValueChange={(value) => setField("subDistrict", value)}
+                            disabled={!form.district}
+                        >
+                            <SelectTrigger className={inputCls}>
+                                <SelectValue placeholder="Select Sub-district" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {subDistricts.map((sd) => (
+                                    <SelectItem key={sd} value={sd}>
+                                        {sd}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Block */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-foreground">
+                            Block <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            value={form.block}
+                            onChange={(e) => setField("block", e.target.value)}
+                            className={inputCls}
+                        />
+                    </div>
+
+                    {/* Ward */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-foreground">
+                            Ward No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            value={form.wardNo}
+                            onChange={(e) => setField("wardNo", e.target.value)}
+                            className={inputCls}
+                        />
+                    </div>
                     <Button
                         type="submit"
                         disabled={loading}
