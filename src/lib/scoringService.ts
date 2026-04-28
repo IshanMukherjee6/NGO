@@ -29,10 +29,8 @@ import {
 } from "firebase/firestore"
 import { db } from "./firebase"
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${GEMINI_KEY}`
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+const AI_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const AI_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 export interface WorkerScore {
     workerId: string
@@ -101,38 +99,39 @@ export function getRankColor(rank: string): string {
     return colors[rank] || colors.C
 }
 
-// ── Core AI Scoring — Gemini ──────────────────────────────────────────────────
+// ── Core AI Scoring —  ──────────────────────────────────────────────────
 
 async function callGemini(prompt: string): Promise<string> {
-    // FIX: Guard against missing API key early
-    if (!GEMINI_KEY) {
-        throw new Error("VITE_GEMINI_API_KEY is not set in your .env file")
-    }
+    console.log("🤖 callGemini called")
+    console.log("🔑 AI_KEY:", AI_KEY ? AI_KEY.slice(0, 10) + "..." : "UNDEFINED ❌")
+    
+    if (!AI_KEY) throw new Error("VITE_OPENROUTER_API_KEY is not set")
 
-    const res = await fetch(GEMINI_URL, {
+    console.log("📡 Sending request to OpenRouter...")
+    const res = await fetch(AI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${AI_KEY}`,
+        },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.2,
-                topP: 0.8,
-                maxOutputTokens: 1024,
-            },
+            model: "mistralai/mistral-7b-instruct:free",
+            messages: [{ role: "user", content: prompt }],
         }),
     })
 
+    console.log("📥 Response status:", res.status)
+    
     if (!res.ok) {
-        // FIX: Log full Gemini error body so you can see what went wrong
-        const errBody = await res.text().catch(() => "(unreadable)")
-        console.error(`Gemini API error ${res.status}:`, errBody)
-        throw new Error(`Gemini API error: ${res.status} — ${errBody}`)
+        const err = await res.text()
+        console.error("❌ OpenRouter error:", err)
+        throw new Error(`AI error: ${res.status} — ${err}`)
     }
 
     const data = await res.json()
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ""
-    // Strip markdown code fences if present
-    return raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+    console.log("✅ OpenRouter response:", JSON.stringify(data).slice(0, 200))
+    return data.choices[0].message.content
+        .replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 }
 
 // ── Score a Worker's Global Profile ──────────────────────────────────────────
@@ -351,12 +350,12 @@ Respond ONLY with valid JSON:
     } catch (err) {
         console.error("scoreWorkerForJob — Gemini call failed:", err)
         // Fallback: assign a neutral score so the application still appears
-        result = {
-            aiScore: 50,
-            matchReasons: ["Score unavailable — AI service error, using default"],
-            concerns: ["Could not reach Gemini API — check VITE_GEMINI_API_KEY"],
-            recommended: false,
-        }
+       result = {
+    aiScore: 50,
+    matchReasons: ["Score unavailable — AI service error, using default"],
+    concerns: ["Could not reach AI API — check VITE_OPENROUTER_API_KEY"],
+    recommended: false,
+}
     }
 
     const aiScore = Math.min(100, Math.max(0, Math.round(result.aiScore)))

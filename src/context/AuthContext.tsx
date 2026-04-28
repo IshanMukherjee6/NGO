@@ -1,20 +1,4 @@
 // src/context/AuthContext.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Global auth state — mirrors the NoteContext / NoteState pattern from
-// Project 2, but uses Firebase instead of JWT + localStorage.
-//
-// Provides: currentUser (Firebase User), userProfile (Firestore doc),
-// loading state, login/logout/register helpers.
-//
-// NOTE for Python backend integration:
-//   When calling your Python API, do:
-//     const token = await currentUser.getIdToken()
-//     fetch("https://your-python-api.com/endpoint", {
-//       headers: { Authorization: `Bearer ${token}` }
-//     })
-//   Verify the Firebase ID token on the Python side using firebase-admin.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, {
     createContext,
     useContext,
@@ -33,12 +17,15 @@ import {
     type UserProfile,
 } from "../lib/authService"
 
-// ── Context shape ─────────────────────────────────────────────────────────────
+// NGO sub-role stored in memory (not Firestore) — just controls which UI to show
+export type NGOSubRole = "official" | "surveyor" | null
 
 interface AuthContextValue {
     currentUser: User | null
     userProfile: UserProfile | null
     authLoading: boolean
+    ngoSubRole: NGOSubRole
+    setNGOSubRole: (role: NGOSubRole) => void
 
     login: (username: string, password: string) => Promise<UserProfile>
     logout: () => Promise<void>
@@ -48,15 +35,12 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-// ── Provider ──────────────────────────────────────────────────────────────────
-
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [currentUser, setCurrentUser] = useState<User | null>(null)
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
     const [authLoading, setAuthLoading] = useState(true)
+    const [ngoSubRole, setNGOSubRole] = useState<NGOSubRole>(null)
 
-    // Mirror of Project 2's token-check on mount — Firebase handles this
-    // automatically via onAuthStateChanged (replaces localStorage token reads)
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user)
@@ -69,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
             } else {
                 setUserProfile(null)
+                setNGOSubRole(null)
             }
             setAuthLoading(false)
         })
@@ -85,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await logoutUser()
         setCurrentUser(null)
         setUserProfile(null)
+        setNGOSubRole(null)
     }
 
     const signUpNGO = async (data: Parameters<typeof registerNGO>[0]) => {
@@ -101,14 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return (
         <AuthContext.Provider
-            value={{ currentUser, userProfile, authLoading, login, logout, signUpNGO, signUpWorker }}
+            value={{ currentUser, userProfile, authLoading, ngoSubRole, setNGOSubRole, login, logout, signUpNGO, signUpWorker }}
         >
             {children}
         </AuthContext.Provider>
     )
 }
-
-// ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
     const ctx = useContext(AuthContext)

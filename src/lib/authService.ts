@@ -1,14 +1,4 @@
 // src/lib/authService.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Replaces Project 2's backend/routes/auth.js
-// All auth operations now go directly to Firebase (no Express server needed).
-// JWT token management is handled by Firebase ID tokens automatically.
-//
-// NOTE: When the Python backend is integrated later, call it AFTER Firebase
-// auth succeeds — pass the Firebase ID token as a Bearer token in the
-// Authorization header of your Python API requests.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -24,8 +14,6 @@ import {
 } from "firebase/firestore"
 import { auth, db } from "./firebase"
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export type UserRole = "ngo" | "worker"
 
 export interface NGOProfile {
@@ -39,6 +27,8 @@ export interface NGOProfile {
     darpanId: string
     username: string
     email: string
+    ngoEmail: string          // real contact email
+    isPremium: boolean
     createdAt: unknown
 }
 
@@ -48,29 +38,44 @@ export interface WorkerProfile {
     fullName: string
     age: string
     phone: string
+    email: string             // real contact email
     panNumber: string
     country: string
     state: string
     city: string
     district: string
     username: string
-    email: string
+    firebaseEmail: string
     createdAt: unknown
 }
 
 export type UserProfile = NGOProfile | WorkerProfile
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── DARPAN ID validation ───────────────────────────────────────────────────
+// Format: XX/YYYY/NNNNNNN  (2-letter state code / 4-digit year / 7-digit number)
+const DARPAN_REGEX = /^[A-Z]{2}\/\d{4}\/\d{7}$/
 
-/** Reads user profile document from Firestore */
+export function validateDarpanId(id: string): { valid: boolean; message: string } {
+    const trimmed = id.trim().toUpperCase()
+    if (!trimmed) return { valid: false, message: "DARPAN ID is required." }
+    if (!DARPAN_REGEX.test(trimmed)) {
+        return {
+            valid: false,
+            message: "Invalid DARPAN ID. Expected format: GJ/2021/0123456 (state/year/7 digits).",
+        }
+    }
+    const year = parseInt(trimmed.split("/")[1])
+    if (year < 2000 || year > new Date().getFullYear()) {
+        return { valid: false, message: `Year in DARPAN ID must be between 2000 and ${new Date().getFullYear()}.` }
+    }
+    return { valid: true, message: "Valid DARPAN ID format." }
+}
+
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     const snap = await getDoc(doc(db, "users", uid))
     if (!snap.exists()) return null
     return snap.data() as UserProfile
 }
-
-// ── ROUTE 1 equivalent: Register NGO ─────────────────────────────────────────
-// Mirrors POST /api/auth/createuser (with NGO-specific fields)
 
 export async function registerNGO(data: {
     ngoName: string
@@ -81,16 +86,13 @@ export async function registerNGO(data: {
     darpanId: string
     username: string
     password: string
+    ngoEmail: string
 }): Promise<UserCredential> {
-    // Firebase requires a real email; we synthesise one from username
     const email = `${data.username.toLowerCase().replace(/\s+/g, "")}@ngo.ngoconnect.app`
-
     const credential = await createUserWithEmailAndPassword(auth, email, data.password)
     const { user } = credential
-
     await updateProfile(user, { displayName: data.ngoName })
 
-    // Store full profile in Firestore (mirrors MongoDB User document)
     const profile: NGOProfile = {
         uid: user.uid,
         role: "ngo",
@@ -102,19 +104,19 @@ export async function registerNGO(data: {
         darpanId: data.darpanId,
         username: data.username,
         email,
+        ngoEmail: data.ngoEmail,
+        isPremium: false,
         createdAt: serverTimestamp(),
     }
     await setDoc(doc(db, "users", user.uid), profile)
-
     return credential
 }
-
-// ── ROUTE 1 equivalent: Register Worker ──────────────────────────────────────
 
 export async function registerWorker(data: {
     fullName: string
     age: string
     phone: string
+    email: string
     panNumber: string
     country: string
     state: string
@@ -123,11 +125,9 @@ export async function registerWorker(data: {
     username: string
     password: string
 }): Promise<UserCredential> {
-    const email = `${data.username.toLowerCase().replace(/\s+/g, "")}@worker.ngoconnect.app`
-
-    const credential = await createUserWithEmailAndPassword(auth, email, data.password)
+    const firebaseEmail = `${data.username.toLowerCase().replace(/\s+/g, "")}@worker.ngoconnect.app`
+    const credential = await createUserWithEmailAndPassword(auth, firebaseEmail, data.password)
     const { user } = credential
-
     await updateProfile(user, { displayName: data.fullName })
 
     const profile: WorkerProfile = {
@@ -136,43 +136,33 @@ export async function registerWorker(data: {
         fullName: data.fullName,
         age: data.age,
         phone: data.phone,
+        email: data.email,
         panNumber: data.panNumber,
         country: data.country,
         state: data.state,
         city: data.city,
         district: data.district,
         username: data.username,
-        email,
+        firebaseEmail,
         createdAt: serverTimestamp(),
     }
     await setDoc(doc(db, "users", user.uid), profile)
-
     return credential
 }
 
-// ── ROUTE 2 equivalent: Login ─────────────────────────────────────────────────
-// Mirrors POST /api/auth/login
-
 export async function loginUser(username: string, password: string): Promise<UserProfile> {
-    // Attempt both NGO and worker email formats
     let credential: UserCredential | null = null
-
     const ngoEmail = `${username.toLowerCase().replace(/\s+/g, "")}@ngo.ngoconnect.app`
     const workerEmail = `${username.toLowerCase().replace(/\s+/g, "")}@worker.ngoconnect.app`
-
     try {
         credential = await signInWithEmailAndPassword(auth, ngoEmail, password)
     } catch {
-        // Not an NGO — try worker
         credential = await signInWithEmailAndPassword(auth, workerEmail, password)
     }
-
     const profile = await getUserProfile(credential.user.uid)
     if (!profile) throw new Error("User profile not found.")
     return profile
 }
-
-// ── Logout ────────────────────────────────────────────────────────────────────
 
 export async function logoutUser(): Promise<void> {
     await signOut(auth)

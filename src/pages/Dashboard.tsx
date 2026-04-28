@@ -1,20 +1,4 @@
 // src/pages/Dashboard.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Integrated AI scoring system:
-//   • NGO: "View Applicants (AI)" opens AIApplicationsPanel with ranked workers
-//   • Worker: WorkerScoreCard shows personal AI score + rank on dashboard
-//   • Pending applications section for NGO with accept/reject
-//   • Delete job modal for NGO
-//   • Survey Analysis navigation button
-//   • All original UI preserved exactly
-//
-// Worker filter enhancements (merged from v2):
-//   • Distance filter (Upto 10km / 10-20km / 20-30km / Beyond 30km)
-//   • Duration dropdown filter
-//   • Department dropdown filter
-//   • Location-distance logic uses workerProfile city/district/state
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -23,7 +7,7 @@ import {
 } from "@/components/ui/select"
 import {
     Briefcase, Plus, Users, FileCheck, Upload,
-    Filter, ChevronDown, X, Phone,
+    Filter, ChevronDown, X, Phone, Mail,
     MapPin, Clock, DollarSign, Building2, CheckCircle,
     AlertCircle, Search, Loader2, Bell, Sparkles,
     Trash2, BarChart2,
@@ -38,23 +22,18 @@ import {
     type Job, type Application,
 } from "../lib/jobService"
 import { uploadProofFile } from "../lib/storageService"
-import type { WorkerProfile } from "../lib/authService"
+import type { WorkerProfile, NGOProfile } from "../lib/authService"
 import AIApplicationsPanel from "../components/AIApplicationsPanel"
 import WorkerScoreCard from "../components/WorkerScoreCard"
 
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
 
 function Label({ children }: { children: React.ReactNode }) {
-    return (
-        <label className="text-sm font-medium text-foreground">
-            {children} <span className="text-red-500">*</span>
-        </label>
-    )
+    return <label className="text-sm font-medium text-foreground">{children} <span className="text-red-500">*</span></label>
 }
 
 function SelectField({ label, value, onValueChange, placeholder, options }: {
-    label: string; value: string; onValueChange: (val: string) => void
-    placeholder: string; options: string[]
+    label: string; value: string; onValueChange: (val: string) => void; placeholder: string; options: string[]
 }) {
     return (
         <div className="flex flex-col gap-1.5">
@@ -65,9 +44,7 @@ function SelectField({ label, value, onValueChange, placeholder, options }: {
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground">
                     {options.map(o => (
-                        <SelectItem key={o} value={o} className="rounded-lg text-sm cursor-pointer focus:bg-accent focus:text-accent-foreground">
-                            {o}
-                        </SelectItem>
+                        <SelectItem key={o} value={o} className="rounded-lg text-sm cursor-pointer focus:bg-accent">{o}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
@@ -76,21 +53,24 @@ function SelectField({ label, value, onValueChange, placeholder, options }: {
 }
 
 // ── Post Job Modal ─────────────────────────────────────────────────────────────
-
-function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted }: {
-    ngoUid: string; ngoName: string
-    onClose: () => void; onJobPosted: () => void
+function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted, prefill }: {
+    ngoUid: string; ngoName: string; onClose: () => void; onJobPosted: () => void
+    prefill?: Partial<{ title: string; department: string; location: string; experience: string; education: string; duration: string }>
 }) {
     const { showToast } = useToast()
     const [form, setForm] = useState({
-        title: "", department: "", positions: "", education: "",
-        experience: "", salary: "", duration: "", location: "",
+        title: prefill?.title || "",
+        department: prefill?.department || "",
+        positions: "",
+        education: prefill?.education || "",
+        experience: prefill?.experience || "",
+        salary: "",
+        duration: prefill?.duration || "",
+        location: prefill?.location || "",
     })
     const [loading, setLoading] = useState(false)
     const [submitted, setSubmitted] = useState(false)
-
-    const setField = (name: string, value: string) =>
-        setForm(prev => ({ ...prev, [name]: value }))
+    const setField = (name: string, value: string) => setForm(prev => ({ ...prev, [name]: value }))
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -151,40 +131,31 @@ function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted }: {
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             <div className="flex flex-col gap-1.5">
                                 <Label>Job Title</Label>
-                                <input value={form.title} onChange={e => setField("title", e.target.value)}
-                                    required placeholder="e.g. Field Survey Associate" className={inputCls} />
+                                <input value={form.title} onChange={e => setField("title", e.target.value)} required placeholder="e.g. Field Survey Associate" className={inputCls} />
                             </div>
-                            <SelectField label="Department" value={form.department}
-                                onValueChange={v => setField("department", v)} placeholder="Select Department"
-                                options={["Operations", "Health", "Training", "Admin", "Finance", "Research"]} />
+                            <SelectField label="Department" value={form.department} onValueChange={v => setField("department", v)} placeholder="Select Department"
+                                options={["Operations","Health","Training","Admin","Finance","Research"]} />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1.5">
                                     <Label>No. of Positions</Label>
-                                    <input type="number" min="1" value={form.positions}
-                                        onChange={e => setField("positions", e.target.value)}
-                                        required placeholder="e.g. 20" className={inputCls} />
+                                    <input type="number" min="1" value={form.positions} onChange={e => setField("positions", e.target.value)} required placeholder="e.g. 20" className={inputCls} />
                                 </div>
                                 <div className="flex flex-col gap-1.5">
                                     <Label>Salary (₹/month)</Label>
-                                    <input value={form.salary} onChange={e => setField("salary", e.target.value)}
-                                        required placeholder="e.g. 18000" className={inputCls} />
+                                    <input value={form.salary} onChange={e => setField("salary", e.target.value)} required placeholder="e.g. 18000" className={inputCls} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <SelectField label="Education" value={form.education}
-                                    onValueChange={v => setField("education", v)} placeholder="Select"
-                                    options={["8th Pass", "10th Pass", "12th Pass", "Graduate", "Post Graduate"]} />
-                                <SelectField label="Experience" value={form.experience}
-                                    onValueChange={v => setField("experience", v)} placeholder="Select"
-                                    options={["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"]} />
+                                <SelectField label="Education" value={form.education} onValueChange={v => setField("education", v)} placeholder="Select"
+                                    options={["8th Pass","10th Pass","12th Pass","Graduate","Post Graduate"]} />
+                                <SelectField label="Experience" value={form.experience} onValueChange={v => setField("experience", v)} placeholder="Select"
+                                    options={["Fresher","0-1 years","1-2 years","2-3 years","3-5 years","5+ years"]} />
                             </div>
-                            <SelectField label="Duration" value={form.duration}
-                                onValueChange={v => setField("duration", v)} placeholder="Select Duration"
-                                options={["1 month", "2 months", "3 months", "6 months", "1 year", "Ongoing"]} />
+                            <SelectField label="Duration" value={form.duration} onValueChange={v => setField("duration", v)} placeholder="Select Duration"
+                                options={["1 month","2 months","3 months","6 months","1 year","Ongoing"]} />
                             <div className="flex flex-col gap-1.5">
                                 <Label>Location</Label>
-                                <input value={form.location} onChange={e => setField("location", e.target.value)}
-                                    required placeholder="e.g. Pune, Maharashtra" className={inputCls} />
+                                <input value={form.location} onChange={e => setField("location", e.target.value)} required placeholder="e.g. Pune, Maharashtra" className={inputCls} />
                             </div>
                             <Button type="submit" disabled={loading} className="rounded-full h-11 font-semibold mt-2">
                                 {loading ? <><Loader2 size={16} className="animate-spin mr-2" />Posting...</> : "Post Job"}
@@ -197,14 +168,10 @@ function PostJobModal({ ngoUid, ngoName, onClose, onJobPosted }: {
     )
 }
 
-// ── Delete Confirm Modal ───────────────────────────────────────────────────────
-
-function DeleteJobModal({ job, onClose, onDeleted }: {
-    job: Job; onClose: () => void; onDeleted: () => void
-}) {
+// ── Delete Confirm Modal ────────────────────────────────────────────────────────
+function DeleteJobModal({ job, onClose, onDeleted }: { job: Job; onClose: () => void; onDeleted: () => void }) {
     const { showToast } = useToast()
     const [loading, setLoading] = useState(false)
-
     const handleDelete = async () => {
         setLoading(true)
         try {
@@ -213,12 +180,11 @@ function DeleteJobModal({ job, onClose, onDeleted }: {
             onDeleted()
             onClose()
         } catch {
-            showToast("Failed to delete job. Please try again.", "error")
+            showToast("Failed to delete job.", "error")
         } finally {
             setLoading(false)
         }
     }
-
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -230,15 +196,12 @@ function DeleteJobModal({ job, onClose, onDeleted }: {
                     <div>
                         <h2 className="text-lg font-bold text-foreground">Delete Job?</h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Are you sure you want to delete <span className="font-semibold text-foreground">"{job.title}"</span>? This cannot be undone.
+                            Are you sure you want to delete <span className="font-semibold">"{job.title}"</span>? This cannot be undone.
                         </p>
                     </div>
                     <div className="flex gap-3 w-full mt-2">
-                        <Button variant="outline" onClick={onClose} className="flex-1 rounded-full">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleDelete} disabled={loading}
-                            className="flex-1 rounded-full bg-red-600 hover:bg-red-700 text-white">
+                        <Button variant="outline" onClick={onClose} className="flex-1 rounded-full">Cancel</Button>
+                        <Button onClick={handleDelete} disabled={loading} className="flex-1 rounded-full bg-red-600 hover:bg-red-700 text-white">
                             {loading ? <Loader2 size={15} className="animate-spin" /> : "Delete"}
                         </Button>
                     </div>
@@ -249,12 +212,8 @@ function DeleteJobModal({ job, onClose, onDeleted }: {
 }
 
 // ── Upload Proof Modal ─────────────────────────────────────────────────────────
-
-function UploadProofModal({
-    workerUid, workerName, jobs, onClose,
-}: {
-    workerUid: string; workerName: string
-    jobs: Application[]; onClose: () => void
+function UploadProofModal({ workerUid, workerName, jobs, onClose }: {
+    workerUid: string; workerName: string; jobs: Application[]; onClose: () => void
 }) {
     const { showToast } = useToast()
     const [file, setFile] = useState<File | null>(null)
@@ -262,7 +221,6 @@ function UploadProofModal({
     const [selectedJobId, setSelectedJobId] = useState("")
     const [loading, setLoading] = useState(false)
     const [submitted, setSubmitted] = useState(false)
-
     const activeJobs = jobs.filter(j => j.status === "accepted")
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -273,18 +231,13 @@ function UploadProofModal({
             const fileURL = await uploadProofFile(file, workerUid)
             const selectedJob = activeJobs.find(j => j.jobId === selectedJobId)
             await submitProof({
-                jobId: selectedJobId,
-                jobTitle: selectedJob?.jobTitle || "",
-                workerId: workerUid,
-                workerName,
-                ngoId: selectedJob?.ngoId || "",
-                fileURL,
-                note,
+                jobId: selectedJobId, jobTitle: selectedJob?.jobTitle || "",
+                workerId: workerUid, workerName, ngoId: selectedJob?.ngoId || "", fileURL, note,
             })
             showToast("Proof submitted successfully!", "success")
             setSubmitted(true)
         } catch {
-            showToast("Failed to submit proof. Please try again.", "error")
+            showToast("Failed to submit proof.", "error")
         } finally {
             setLoading(false)
         }
@@ -318,17 +271,13 @@ function UploadProofModal({
                     ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             {activeJobs.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-4">
-                                    You have no active (accepted) jobs to submit proof for.
-                                </p>
+                                <p className="text-sm text-muted-foreground text-center py-4">You have no active jobs to submit proof for.</p>
                             ) : (
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-sm font-medium text-foreground">Job <span className="text-red-500">*</span></label>
                                     <select value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)} required className={inputCls}>
                                         <option value="">Select a job</option>
-                                        {activeJobs.map(j => (
-                                            <option key={j.jobId} value={j.jobId}>{j.jobTitle}</option>
-                                        ))}
+                                        {activeJobs.map(j => <option key={j.jobId} value={j.jobId}>{j.jobTitle}</option>)}
                                     </select>
                                 </div>
                             )}
@@ -336,8 +285,7 @@ function UploadProofModal({
                                 <label className="text-sm font-medium text-foreground">Upload File <span className="text-red-500">*</span></label>
                                 <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-8 cursor-pointer transition-all ${file ? "border-foreground bg-muted/20" : "border-border hover:border-muted-foreground"}`}>
                                     <Upload size={24} className={file ? "text-foreground" : "text-muted-foreground"} />
-                                    <span className="text-sm text-muted-foreground">{file ? file.name : "Click to upload photo or document"}</span>
-                                    <span className="text-xs text-muted-foreground/60">JPG, PNG, PDF up to 10MB</span>
+                                    <span className="text-sm text-muted-foreground">{file ? file.name : "Click to upload"}</span>
                                     <input type="file" className="hidden" accept="image/*,.pdf" onChange={e => setFile(e.target.files?.[0] || null)} />
                                 </label>
                             </div>
@@ -358,13 +306,13 @@ function UploadProofModal({
 }
 
 // ── NGO Dashboard ──────────────────────────────────────────────────────────────
-
 function NGODashboard() {
     const { currentUser, userProfile } = useAuth()
     const { showToast } = useToast()
     const navigate = useNavigate()
 
     const [showPostJob, setShowPostJob] = useState(false)
+    const [postJobPrefill, setPostJobPrefill] = useState<Partial<{ title: string; department: string; location: string; experience: string; education: string; duration: string }> | undefined>(undefined)
     const [expandedJob, setExpandedJob] = useState<string | null>(null)
     const [jobToDelete, setJobToDelete] = useState<Job | null>(null)
     const [jobs, setJobs] = useState<Job[]>([])
@@ -373,8 +321,10 @@ function NGODashboard() {
     const [updatingAppId, setUpdatingAppId] = useState<string | null>(null)
     const [aiPanelJob, setAiPanelJob] = useState<Job | null>(null)
 
-    const ngoName = userProfile?.role === "ngo" ? (userProfile as { ngoName?: string }).ngoName ?? "" : ""
-    const isPremiumNGO = true
+    const ngoProfile = userProfile as NGOProfile
+    const ngoName = ngoProfile?.ngoName ?? ""
+    const ngoEmail = ngoProfile?.ngoEmail ?? ""
+    const isPremiumNGO = ngoProfile?.isPremium ?? false
 
     const loadData = async () => {
         if (!currentUser) return
@@ -399,32 +349,27 @@ function NGODashboard() {
     const totalWorkers = applications.filter(a => a.status === "accepted").length
     const closedJobs = jobs.filter(j => j.status === "closed").length
     const departments = new Set(jobs.map(j => j.department)).size
+    const getAcceptedWorkersForJob = (jobId: string) => applications.filter(a => a.jobId === jobId && a.status === "accepted")
 
-    const getAcceptedWorkersForJob = (jobId: string) =>
-        applications.filter(a => a.jobId === jobId && a.status === "accepted")
-
-    const handleApplicationDecision = async (appId: string, decision: "accepted" | "rejected") => {
+    const handleApplicationDecision = async (appId: string, decision: "accepted" | "rejected", workerName?: string, jobTitle?: string) => {
         setUpdatingAppId(appId)
         try {
             await updateApplicationStatus(appId, decision)
-            showToast(
-                decision === "accepted" ? "Worker accepted!" : "Application rejected.",
-                decision === "accepted" ? "success" : "error"
-            )
+            if (decision === "accepted") {
+                showToast(`✅ ${workerName || "Worker"} accepted for "${jobTitle || "the job"}"!`, "success")
+            } else {
+                showToast(`Application from ${workerName || "worker"} rejected.`, "error")
+            }
             await loadData()
         } catch {
-            showToast("Failed to update application. Please try again.", "error")
+            showToast("Failed to update application.", "error")
         } finally {
             setUpdatingAppId(null)
         }
     }
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center py-32">
-                <Loader2 size={28} className="animate-spin text-muted-foreground" />
-            </div>
-        )
+        return <div className="flex items-center justify-center py-32"><Loader2 size={28} className="animate-spin text-muted-foreground" /></div>
     }
 
     return (
@@ -434,13 +379,17 @@ function NGODashboard() {
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">{ngoName}</h1>
+                    {ngoEmail && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Mail size={11} />{ngoEmail}
+                        </p>
+                    )}
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                    <Button variant="outline" onClick={() => navigate("/survey")}
-                        className="rounded-full px-5 gap-2 font-medium">
+                    <Button variant="outline" onClick={() => navigate("/survey")} className="rounded-full px-5 gap-2 font-medium">
                         <BarChart2 size={15} /> Survey Analysis
                     </Button>
-                    <Button onClick={() => setShowPostJob(true)} className="rounded-full px-6 font-semibold gap-2">
+                    <Button onClick={() => { setPostJobPrefill(undefined); setShowPostJob(true) }} className="rounded-full px-6 font-semibold gap-2">
                         <Plus size={16} /> Post a Job
                     </Button>
                 </div>
@@ -491,22 +440,22 @@ function NGODashboard() {
                                     </p>
                                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Phone size={11} />{app.workerPhone}</span>
+                                        {(app as Application & { workerEmail?: string }).workerEmail && (
+                                            <span className="flex items-center gap-1"><Mail size={11} />{(app as Application & { workerEmail?: string }).workerEmail}</span>
+                                        )}
                                         <span className="flex items-center gap-1"><MapPin size={11} />{app.workerLocation}</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
                                     <Button size="sm" variant="outline"
-                                        className="rounded-full px-4 border-red-500/30 text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
+                                        className="rounded-full px-4 border-red-500/30 text-red-500 hover:bg-red-500/10"
                                         disabled={updatingAppId === app.id}
-                                        onClick={() => handleApplicationDecision(app.id, "rejected")}
-                                    >
+                                        onClick={() => handleApplicationDecision(app.id, "rejected", app.workerName, app.jobTitle)}>
                                         {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Reject"}
                                     </Button>
-                                    <Button size="sm"
-                                        className="rounded-full px-4 bg-green-600 hover:bg-green-700 text-white"
+                                    <Button size="sm" className="rounded-full px-4 bg-green-600 hover:bg-green-700 text-white"
                                         disabled={updatingAppId === app.id}
-                                        onClick={() => handleApplicationDecision(app.id, "accepted")}
-                                    >
+                                        onClick={() => handleApplicationDecision(app.id, "accepted", app.workerName, app.jobTitle)}>
                                         {updatingAppId === app.id ? <Loader2 size={13} className="animate-spin" /> : "Accept"}
                                     </Button>
                                 </div>
@@ -537,9 +486,7 @@ function NGODashboard() {
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <h3 className="font-semibold text-foreground">{job.title}</h3>
-                                                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${job.status === "active"
-                                                    ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                                    : "bg-muted text-muted-foreground border-border"}`}>
+                                                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${job.status === "active" ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-muted text-muted-foreground border-border"}`}>
                                                     {job.status === "active" ? "Active" : "Closed"}
                                                 </span>
                                             </div>
@@ -551,32 +498,22 @@ function NGODashboard() {
                                                 <span className="flex items-center gap-1"><MapPin size={11} />{job.location}</span>
                                             </div>
                                         </div>
-
-                                        {/* Action buttons */}
                                         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                                            <button
-                                                onClick={() => setAiPanelJob(job)}
-                                                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/5 hover:bg-violet-500/15 transition-all"
-                                            >
-                                                <Sparkles size={12} />
-                                                AI Applicants
+                                            <button onClick={() => setAiPanelJob(job)}
+                                                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/5 hover:bg-violet-500/15 transition-all">
+                                                <Sparkles size={12} /> AI Applicants
                                             </button>
-                                            <button
-                                                onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                                                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                                            >
+                                            <button onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                                                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
                                                 <span>{expandedJob === job.id ? "Hide" : "View"} Workers</span>
                                                 <ChevronDown size={15} className={`transition-transform ${expandedJob === job.id ? "rotate-180" : ""}`} />
                                             </button>
-                                            <button
-                                                onClick={() => setJobToDelete(job)}
-                                                className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all"
-                                            >
+                                            <button onClick={() => setJobToDelete(job)}
+                                                className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all">
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>
-
                                     {expandedJob === job.id && (
                                         <div className="border-t border-border bg-muted/20 px-5 py-4">
                                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Accepted Workers</p>
@@ -592,9 +529,16 @@ function NGODashboard() {
                                                                     <MapPin size={10} />{w.workerLocation}
                                                                 </p>
                                                             </div>
-                                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                                <Phone size={12} />{w.workerPhone}
-                                                            </span>
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                    <Phone size={12} />{w.workerPhone}
+                                                                </span>
+                                                                {(w as Application & { workerEmail?: string }).workerEmail && (
+                                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                        <Mail size={12} />{(w as Application & { workerEmail?: string }).workerEmail}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -608,41 +552,19 @@ function NGODashboard() {
                 )}
             </div>
 
-            {/* Post Job Modal */}
             {showPostJob && (
-                <PostJobModal
-                    ngoUid={currentUser!.uid}
-                    ngoName={ngoName}
-                    onClose={() => setShowPostJob(false)}
-                    onJobPosted={loadData}
-                />
+                <PostJobModal ngoUid={currentUser!.uid} ngoName={ngoName} onClose={() => setShowPostJob(false)} onJobPosted={loadData} prefill={postJobPrefill} />
             )}
-
-            {/* Delete Job Modal */}
-            {jobToDelete && (
-                <DeleteJobModal
-                    job={jobToDelete}
-                    onClose={() => setJobToDelete(null)}
-                    onDeleted={loadData}
-                />
-            )}
-
-            {/* AI Applications Panel */}
+            {jobToDelete && <DeleteJobModal job={jobToDelete} onClose={() => setJobToDelete(null)} onDeleted={loadData} />}
             {aiPanelJob && (
-                <AIApplicationsPanel
-                    jobId={aiPanelJob.id}
-                    jobTitle={aiPanelJob.title}
-                    isPremiumNGO={isPremiumNGO}
-                    onClose={() => setAiPanelJob(null)}
-                    onStatusChange={loadData}
-                />
+                <AIApplicationsPanel jobId={aiPanelJob.id} jobTitle={aiPanelJob.title} isPremiumNGO={isPremiumNGO}
+                    onClose={() => setAiPanelJob(null)} onStatusChange={loadData} />
             )}
         </div>
     )
 }
 
-// ── Worker Dashboard ───────────────────────────────────────────────────────────
-
+// ── Worker Dashboard ────────────────────────────────────────────────────────────
 function WorkerDashboard() {
     const { currentUser, userProfile } = useAuth()
     const { showToast } = useToast()
@@ -653,13 +575,7 @@ function WorkerDashboard() {
     const [showUpload, setShowUpload] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
     const [search, setSearch] = useState("")
-    // Enhanced filters: added location (distance), duration, department
-    const [filters, setFilters] = useState({
-        minSalary: "",
-        location: "",
-        duration: "",
-        department: "",
-    })
+    const [filters, setFilters] = useState({ minSalary: "", experience: "", department: "", location: "" })
     const [loading, setLoading] = useState(true)
     const [applyingJobId, setApplyingJobId] = useState<string | null>(null)
 
@@ -669,14 +585,10 @@ function WorkerDashboard() {
     const loadData = async () => {
         if (!currentUser) return
         try {
-            const [jobs, apps] = await Promise.all([
-                fetchAllJobs(),
-                fetchWorkerApplications(currentUser.uid),
-            ])
+            const [jobs, apps] = await Promise.all([fetchAllJobs(), fetchWorkerApplications(currentUser.uid)])
             setAvailableJobs(jobs)
             setMyApplications(apps)
-        } catch (err) {
-            console.error("Worker loadData error:", err)
+        } catch {
             showToast("Failed to load data", "error")
         } finally {
             setLoading(false)
@@ -685,38 +597,31 @@ function WorkerDashboard() {
 
     useEffect(() => { loadData() }, [currentUser])
 
+    // Alert workers when a new acceptance comes in (compare previous state)
+    useEffect(() => {
+        const accepted = myApplications.filter(a => a.status === "accepted")
+        if (accepted.length > 0) {
+            // We just store this — toast on first load would be noisy; it's shown when decision happens
+        }
+    }, [myApplications])
+
     const activeApps = myApplications.filter(a => a.status === "accepted")
     const pendingApps = myApplications.filter(a => a.status === "pending")
     const appliedJobIds = new Set(myApplications.map(a => a.jobId))
 
-    // Location distance filter — best-effort string match against worker's city/district/state
-    const workerCity = workerProfile?.city?.toLowerCase() ?? ""
-    const workerDistrict = workerProfile?.district?.toLowerCase() ?? ""
-    const workerState = workerProfile?.state?.toLowerCase() ?? ""
+    const DEPARTMENTS = ["Operations","Health","Training","Admin","Finance","Research"]
+    const EXPERIENCE_OPTIONS = ["Fresher","0-1 years","1-2 years","2-3 years","3-5 years","5+ years"]
 
     const filteredJobs = availableJobs.filter(job => {
         const matchSearch =
             job.title.toLowerCase().includes(search.toLowerCase()) ||
-            job.department.toLowerCase().includes(search.toLowerCase())
+            job.department.toLowerCase().includes(search.toLowerCase()) ||
+            job.location.toLowerCase().includes(search.toLowerCase())
         const matchSalary = !filters.minSalary || job.salaryNum >= parseInt(filters.minSalary)
-        const matchDuration = !filters.duration || job.duration === filters.duration
+        const matchExp = !filters.experience || job.experience === filters.experience
         const matchDept = !filters.department || job.department === filters.department
-
-        let matchLocation = true
-        if (filters.location) {
-            const loc = job.location.toLowerCase()
-            if (filters.location === "upto10") {
-                matchLocation = workerCity !== "" && loc.includes(workerCity)
-            } else if (filters.location === "10to20") {
-                matchLocation = workerDistrict !== "" && loc.includes(workerDistrict) && !loc.includes(workerCity)
-            } else if (filters.location === "20to30") {
-                matchLocation = workerState !== "" && loc.includes(workerState) && !loc.includes(workerDistrict)
-            } else if (filters.location === "beyond30") {
-                matchLocation = !loc.includes(workerState)
-            }
-        }
-
-        return matchSearch && matchSalary && matchDuration && matchDept && matchLocation && !appliedJobIds.has(job.id)
+        const matchLoc = !filters.location || job.location.toLowerCase().includes(filters.location.toLowerCase())
+        return matchSearch && matchSalary && matchExp && matchDept && matchLoc && !appliedJobIds.has(job.id)
     })
 
     const handleApply = async (job: Job) => {
@@ -729,10 +634,11 @@ function WorkerDashboard() {
                     uid: currentUser.uid,
                     fullName: workerProfile.fullName,
                     phone: workerProfile.phone,
+                    email: workerProfile.email,
                     location: `${workerProfile.city}, ${workerProfile.state}`,
                 }
             )
-            showToast("Application submitted!", "success")
+            showToast(`Applied for "${job.title}" successfully!`, "success")
             await loadData()
         } catch {
             showToast("Failed to apply. Please try again.", "error")
@@ -741,13 +647,9 @@ function WorkerDashboard() {
         }
     }
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center py-32">
-                <Loader2 size={28} className="animate-spin text-muted-foreground" />
-            </div>
-        )
-    }
+    if (loading) return <div className="flex items-center justify-center py-32"><Loader2 size={28} className="animate-spin text-muted-foreground" /></div>
+
+    const hasActiveFilters = Object.values(filters).some(v => v !== "")
 
     return (
         <div className="max-w-5xl mx-auto px-6 md:px-10 py-10">
@@ -756,6 +658,11 @@ function WorkerDashboard() {
                 <div>
                     <p className="text-sm text-muted-foreground font-medium">Welcome back,</p>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
+                    {workerProfile?.email && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Mail size={11} />{workerProfile.email}
+                        </p>
+                    )}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" onClick={() => setShowUpload(true)} className="rounded-full gap-2 font-medium">
@@ -804,8 +711,7 @@ function WorkerDashboard() {
                                         </div>
                                         <p className="text-sm text-muted-foreground">{app.ngoName}</p>
                                     </div>
-                                    <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}
-                                        className="rounded-full gap-1.5 font-medium flex-shrink-0">
+                                    <Button size="sm" variant="outline" onClick={() => setShowUpload(true)} className="rounded-full gap-1.5 font-medium flex-shrink-0">
                                         <Upload size={13} /> Upload Proof
                                     </Button>
                                 </div>
@@ -836,105 +742,57 @@ function WorkerDashboard() {
                 </div>
             )}
 
-            {/* Available Jobs */}
+            {/* Available Jobs with Filters matching Jobs page */}
             <div>
                 <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="relative flex-1 min-w-[200px]">
                         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <input value={search} onChange={e => setSearch(e.target.value)}
-                            placeholder="Search jobs by title or department..."
+                            placeholder="Search jobs by title, department or location..."
                             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all" />
                     </div>
                     <Button variant="outline" onClick={() => setShowFilters(!showFilters)}
                         className={`rounded-xl gap-2 font-medium ${showFilters ? "border-foreground" : ""}`}>
                         <Filter size={15} /> Filters
-                        {(filters.minSalary || filters.location || filters.duration || filters.department) && (
-                            <span className="w-2 h-2 rounded-full bg-foreground" />
-                        )}
+                        {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-foreground" />}
                     </Button>
                 </div>
 
                 {showFilters && (
                     <div className="bg-card border border-border rounded-2xl p-5 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Min Salary */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min. Salary (₹)</label>
-                            <input
-                                type="number" min="0"
-                                value={filters.minSalary}
+                            <input type="number" min="0" value={filters.minSalary}
                                 onChange={e => setFilters(prev => ({ ...prev, minSalary: e.target.value }))}
-                                placeholder="e.g. 15000"
-                                className={inputCls}
-                            />
+                                placeholder="e.g. 15000" className={inputCls} />
                         </div>
-
-                        {/* Distance */}
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Distance</label>
-                            <Select
-                                value={filters.location}
-                                onValueChange={v => setFilters(prev => ({ ...prev, location: v === "any" ? "" : v }))}
-                            >
-                                <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
-                                    <SelectValue placeholder="Any distance" />
-                                </SelectTrigger>
-                                <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
-                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any distance</SelectItem>
-                                    <SelectItem value="upto10" className="rounded-lg text-sm cursor-pointer">Upto 10 km</SelectItem>
-                                    <SelectItem value="10to20" className="rounded-lg text-sm cursor-pointer">10 – 20 km</SelectItem>
-                                    <SelectItem value="20to30" className="rounded-lg text-sm cursor-pointer">20 – 30 km</SelectItem>
-                                    <SelectItem value="beyond30" className="rounded-lg text-sm cursor-pointer">Beyond 30 km</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Experience</label>
+                            <select value={filters.experience}
+                                onChange={e => setFilters(prev => ({ ...prev, experience: e.target.value }))}
+                                className={`${inputCls} appearance-none cursor-pointer`}>
+                                <option value="">Any</option>
+                                {EXPERIENCE_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
+                            </select>
                         </div>
-
-                        {/* Duration */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration</label>
-                            <Select
-                                value={filters.duration}
-                                onValueChange={v => setFilters(prev => ({ ...prev, duration: v === "any" ? "" : v }))}
-                            >
-                                <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
-                                    <SelectValue placeholder="Any duration" />
-                                </SelectTrigger>
-                                <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
-                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any duration</SelectItem>
-                                    <SelectItem value="1 month" className="rounded-lg text-sm cursor-pointer">1 month</SelectItem>
-                                    <SelectItem value="2 months" className="rounded-lg text-sm cursor-pointer">2 months</SelectItem>
-                                    <SelectItem value="3 months" className="rounded-lg text-sm cursor-pointer">3 months</SelectItem>
-                                    <SelectItem value="6 months" className="rounded-lg text-sm cursor-pointer">6 months</SelectItem>
-                                    <SelectItem value="1 year" className="rounded-lg text-sm cursor-pointer">1 year</SelectItem>
-                                    <SelectItem value="Ongoing" className="rounded-lg text-sm cursor-pointer">Ongoing</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Department */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</label>
-                            <Select
-                                value={filters.department}
-                                onValueChange={v => setFilters(prev => ({ ...prev, department: v === "any" ? "" : v }))}
-                            >
-                                <SelectTrigger className="rounded-xl border-border bg-muted/30 text-sm h-10">
-                                    <SelectValue placeholder="Any dept." />
-                                </SelectTrigger>
-                                <SelectContent position="popper" className="z-[9999] rounded-xl border-border bg-popover text-popover-foreground">
-                                    <SelectItem value="any" className="rounded-lg text-sm cursor-pointer">Any dept.</SelectItem>
-                                    {["Operations", "Health", "Training", "Admin", "Finance", "Research"].map(d => (
-                                        <SelectItem key={d} value={d} className="rounded-lg text-sm cursor-pointer">{d}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <select value={filters.department}
+                                onChange={e => setFilters(prev => ({ ...prev, department: e.target.value }))}
+                                className={`${inputCls} appearance-none cursor-pointer`}>
+                                <option value="">Any</option>
+                                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                            </select>
                         </div>
-
-                        {/* Clear filters */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</label>
+                            <input value={filters.location}
+                                onChange={e => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                                placeholder="e.g. Mumbai" className={inputCls} />
+                        </div>
                         <div className="sm:col-span-2 lg:col-span-4 flex justify-end pt-1">
-                            <button
-                                onClick={() => setFilters({ minSalary: "", location: "", duration: "", department: "" })}
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                            >
+                            <button onClick={() => setFilters({ minSalary: "", experience: "", department: "", location: "" })}
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                                 Clear all filters
                             </button>
                         </div>
@@ -949,11 +807,8 @@ function WorkerDashboard() {
                     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                         <AlertCircle size={32} className="text-muted-foreground" />
                         <p className="text-muted-foreground">No jobs match your filters.</p>
-                        <button
-                            onClick={() => { setSearch(""); setFilters({ minSalary: "", location: "", duration: "", department: "" }) }}
-                            className="text-sm text-foreground font-semibold hover:underline">
-                            Clear all filters
-                        </button>
+                        <button onClick={() => { setSearch(""); setFilters({ minSalary: "", experience: "", department: "", location: "" }) }}
+                            className="text-sm text-foreground font-semibold hover:underline">Clear all filters</button>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
@@ -1012,11 +867,7 @@ function WorkerDashboard() {
                                 <div key={app.id} className={`rounded-2xl border p-5 ${app.status === "accepted" ? "border-green-500/30 bg-green-500/5" : app.status === "rejected" ? "border-red-500/20 bg-red-500/5" : "border-border bg-card"}`}>
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="font-semibold text-foreground">{app.jobTitle}</h3>
-                                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${app.status === "accepted"
-                                            ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                            : app.status === "rejected"
-                                                ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                                : "bg-blue-500/10 text-blue-500 border-blue-500/20"}`}>
+                                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${app.status === "accepted" ? "bg-green-500/10 text-green-500 border-green-500/20" : app.status === "rejected" ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"}`}>
                                             {app.status === "accepted" ? "Accepted" : app.status === "rejected" ? "Rejected" : "Pending"}
                                         </span>
                                     </div>
@@ -1029,19 +880,13 @@ function WorkerDashboard() {
             )}
 
             {showUpload && (
-                <UploadProofModal
-                    workerUid={currentUser!.uid}
-                    workerName={displayName}
-                    jobs={myApplications}
-                    onClose={() => setShowUpload(false)}
-                />
+                <UploadProofModal workerUid={currentUser!.uid} workerName={displayName} jobs={myApplications} onClose={() => setShowUpload(false)} />
             )}
         </div>
     )
 }
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
-
 export default function Dashboard() {
     const { userProfile, authLoading } = useAuth()
 

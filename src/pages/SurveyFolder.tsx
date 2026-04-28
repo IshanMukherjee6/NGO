@@ -13,7 +13,7 @@ import { useToast } from "../context/ToastContext"
 import {
     fetchSurveyFolder,
     fetchSurveyDocuments,
-    addSurveyDocument,
+    addSurveyDocumentWithOCR,
     updateDocumentStatus,
     updateDocumentPriority,
     deleteSurveyDocument,
@@ -21,7 +21,6 @@ import {
     type SurveyDocument,
     type DocumentStatus,
 } from "../lib/surveyService"
-import { uploadProofFile } from "../lib/storageService"
 import { Button } from "@/components/ui/button"
 import {
     ArrowLeft, Upload, Sparkles, Loader2, FileText,
@@ -114,11 +113,13 @@ function StatusDropdown({
 
 function UploadModal({
     folderId,
+    folder,
     workerUid,
     onClose,
     onUploaded,
 }: {
     folderId: string
+    folder: SurveyFolder
     workerUid: string
     onClose: () => void
     onUploaded: () => void
@@ -133,12 +134,27 @@ function UploadModal({
         if (!file) return
         setLoading(true)
         try {
-            const fileURL = await uploadProofFile(file, workerUid)
-            await addSurveyDocument(folderId, {
-                name: file.name,
-                fileURL,
-                fileType: file.type,
+            // Convert file to base64
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => resolve((reader.result as string).split(",")[1])
+                reader.onerror = () => reject(new Error("Failed to read file"))
+                reader.readAsDataURL(file)
             })
+
+            await addSurveyDocumentWithOCR(
+                folderId,
+                {
+                    state: folder.state,
+                    district: folder.district,
+                    block: folder.block,
+                    wardNo: folder.wardNo,
+                },
+                base64,
+                workerUid,
+                file.name,
+            )
+
             showToast("Document uploaded!", "success")
             setDone(true)
             onUploaded()
@@ -266,7 +282,6 @@ Each object must have "index" (1-based, matching the list above), "rank" (1 = hi
         .map((b: { text: string }) => b.text)
         .join("") ?? ""
 
-    // Strip possible markdown fences
     const clean = text.replace(/```json|```/g, "").trim()
     const parsed: { index: number; rank: number; reason: string }[] = JSON.parse(clean)
 
@@ -339,7 +354,6 @@ export default function SurveyFolderPage() {
         try {
             const results = await runAIPrioritisation(documents, folder)
 
-            // Save ranks to Firestore and update local state
             await Promise.all(
                 results.map(r =>
                     updateDocumentPriority(folder.id, r.id, r.rank, r.reason)
@@ -563,9 +577,10 @@ export default function SurveyFolderPage() {
                 )}
             </div>
 
-            {showUpload && currentUser && (
+            {showUpload && currentUser && folder && (
                 <UploadModal
                     folderId={folder.id}
+                    folder={folder}
                     workerUid={currentUser.uid}
                     onClose={() => setShowUpload(false)}
                     onUploaded={loadData}
