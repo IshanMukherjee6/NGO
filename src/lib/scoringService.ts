@@ -1,19 +1,5 @@
 // src/lib/scoringService.ts
-// ─────────────────────────────────────────────────────────────────────────────
 // AI-Powered Worker Scoring & Job Matching System
-// Uses Google Gemini API for intelligent scoring
-// Implements Hungarian Algorithm for optimal job-worker assignment
-//
-// FIXES APPLIED:
-//   • computeWorkerGlobalScore(): replaced buggy addDoc+setDoc catch block
-//     with a single setDoc({ merge: true }) — no more duplicate documents.
-//   • scoreWorkerForJob(): added try/catch around Gemini call with detailed
-//     error logging so failures are visible in console.
-//   • fetchScoredApplications(): removed where("status","==","pending") filter
-//     so no composite index is needed; filtering is done client-side instead.
-//   • onWorkerApplied(): improved error logging to surface Gemini/API errors.
-//   • callGemini(): added console.error on non-ok responses for easier debug.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import {
     collection,
@@ -29,13 +15,19 @@ import {
 } from "firebase/firestore"
 import { db } from "./firebase"
 
-const AI_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
-const AI_URL = "https://openrouter.ai/api/v1/chat/completions"
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
+
+const GEMINI_URL =
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`
+
+// ─────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────
 
 export interface WorkerScore {
     workerId: string
     workerName: string
-    totalScore: number          // 0–100
+    totalScore: number
     rank: "S" | "A" | "B" | "C" | "D"
     breakdown: ScoreBreakdown
     redFlagged: boolean
@@ -44,11 +36,11 @@ export interface WorkerScore {
 }
 
 export interface ScoreBreakdown {
-    locationScore: number       // 0–25  (highest weight — emergency readiness)
-    liabilityScore: number      // 0–25  (job completion, attendance, certification)
-    skillScore: number          // 0–20  (skill match, job-specific fit)
-    ratingScore: number         // 0–20  (past NGO ratings, balanced for new workers)
-    reliabilityScore: number    // 0–10  (consistency, time adherence)
+    locationScore: number
+    liabilityScore: number
+    skillScore: number
+    ratingScore: number
+    reliabilityScore: number
 }
 
 export interface JobApplicationScore {
@@ -56,9 +48,9 @@ export interface JobApplicationScore {
     workerId: string
     workerName: string
     jobId: string
-    aiScore: number             // 0–100 job-specific score
+    aiScore: number
     rank: "S" | "A" | "B" | "C" | "D"
-    breakdown?: ScoreBreakdown
+    breakdown?: ScoreBreakdown | null
     matchReasons: string[]
     concerns: string[]
     recommended: boolean
@@ -71,14 +63,16 @@ export interface WorkerRatingInput {
     applicationId: string
     ngoId: string
     completedOnTime: boolean
-    attendancePercent: number   // 0–100
-    qualityRating: number       // 1–5 by NGO
+    attendancePercent: number
+    qualityRating: number
     finalOutput: "excellent" | "good" | "average" | "poor"
     flagged: boolean
     flagReason?: string
 }
 
-// ── Rank Slabs ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// RANK HELPERS
+// ─────────────────────────────────────────────────────────────
 
 export function getWorkerRank(score: number): "S" | "A" | "B" | "C" | "D" {
     if (score >= 88) return "S"
@@ -99,128 +93,126 @@ export function getRankColor(rank: string): string {
     return colors[rank] || colors.C
 }
 
-// ── Core AI Scoring —  ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// GEMINI API CALL
+// ─────────────────────────────────────────────────────────────
 
 async function callGemini(prompt: string): Promise<string> {
-    console.log("🤖 callGemini called")
-    console.log("🔑 AI_KEY:", AI_KEY ? AI_KEY.slice(0, 10) + "..." : "UNDEFINED ❌")
-    
-    if (!AI_KEY) throw new Error("VITE_OPENROUTER_API_KEY is not set")
+    console.log("🤖 callGemini → Gemini 1.5 Flash")
 
-    console.log("📡 Sending request to OpenRouter...")
-    const res = await fetch(AI_URL, {
+    if (!GEMINI_KEY) {
+        throw new Error("VITE_GEMINI_API_KEY is not set")
+    }
+
+    const res = await fetch(GEMINI_URL, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${AI_KEY}`,
         },
         body: JSON.stringify({
-            model: "mistralai/mistral-7b-instruct:free",
-            messages: [{ role: "user", content: prompt }],
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 1024,
+                responseMimeType: "application/json",
+            },
         }),
     })
 
-    console.log("📥 Response status:", res.status)
-    
+    console.log("📥 Gemini response status:", res.status)
+
+    if (res.status === 429) {
+        throw new Error("Gemini rate limit exceeded — try again in 1 minute")
+    }
+
     if (!res.ok) {
-        const err = await res.text()
-        console.error("❌ OpenRouter error:", err)
-        throw new Error(`AI error: ${res.status} — ${err}`)
+        const err = await res.text().catch(() => "")
+        console.error("❌ Gemini Error:", err)
+        throw new Error(`AI Error ${res.status}: ${err}`)
     }
 
     const data = await res.json()
-    console.log("✅ OpenRouter response:", JSON.stringify(data).slice(0, 200))
-    return data.choices[0].message.content
-        .replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+
+    const raw =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text || ""
+
+    return raw
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim()
 }
 
-// ── Score a Worker's Global Profile ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// GLOBAL WORKER SCORE
+// ─────────────────────────────────────────────────────────────
 
 export async function computeWorkerGlobalScore(workerId: string): Promise<WorkerScore> {
-    // 1. Fetch worker profile
     const workerSnap = await getDoc(doc(db, "users", workerId))
     if (!workerSnap.exists()) throw new Error("Worker not found")
+
     const worker = workerSnap.data()
 
-    // 2. Fetch all applications
     const appsSnap = await getDocs(query(
         collection(db, "applications"),
         where("workerId", "==", workerId)
     ))
-    const applications = appsSnap.docs.map(d => d.data())
 
-    // 3. Fetch all ratings
     const ratingsSnap = await getDocs(query(
         collection(db, "workerRatings"),
         where("workerId", "==", workerId)
     ))
-    const ratings = ratingsSnap.docs.map(d => d.data())
 
-    // 4. Fetch red flags
     const flagsSnap = await getDocs(query(
         collection(db, "workerFlags"),
         where("workerId", "==", workerId),
         where("active", "==", true)
     ))
+
+    const applications = appsSnap.docs.map(d => d.data())
+    const ratings = ratingsSnap.docs.map(d => d.data())
     const flags = flagsSnap.docs.map(d => d.data())
 
-    // 5. Build prompt
     const totalJobs = applications.length
     const completedJobs = ratings.filter(r => r.completedOnTime).length
-    const avgRating = ratings.length > 0
-        ? ratings.reduce((s, r) => s + (r.qualityRating || 3), 0) / ratings.length
-        : null
-    const avgAttendance = ratings.length > 0
-        ? ratings.reduce((s, r) => s + (r.attendancePercent || 100), 0) / ratings.length
-        : null
-    const isCertified = worker.certified === true
-    const isNewWorker = totalJobs === 0
+
+    const avgRating =
+        ratings.length > 0
+            ? ratings.reduce((s, r) => s + (r.qualityRating || 3), 0) / ratings.length
+            : null
+
+    const avgAttendance =
+        ratings.length > 0
+            ? ratings.reduce((s, r) => s + (r.attendancePercent || 100), 0) / ratings.length
+            : null
 
     const prompt = `
-You are a fair, unbiased AI scoring system for an NGO worker platform.
-Score this worker's GLOBAL PROFILE. Be fair to new workers — lack of history should NOT heavily penalize them.
+Score this worker fairly for an NGO platform.
 
-WORKER PROFILE:
-- Location: ${worker.city || "Unknown"}, ${worker.state || "Unknown"}
-- Education: ${worker.education || "Not specified"}
-- Skills: ${worker.skills || "Not listed"}
-- Is Certified by an NGO: ${isCertified ? "YES (+bonus)" : "No"}
-- Account verified/documents uploaded: ${worker.documentsVerified ? "YES" : "No"}
-- Is new worker (no job history): ${isNewWorker ? "YES — be generous, do not penalize" : "No"}
+WORKER:
+Location: ${worker.city || "Unknown"}, ${worker.state || "Unknown"}
+Education: ${worker.education || "None"}
+Skills: ${worker.skills || "None"}
 
-JOB HISTORY:
-- Total applications: ${totalJobs}
-- Completed on time: ${completedJobs}
-- Completion rate: ${totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : "N/A (new)"}%
-- Average NGO rating: ${avgRating !== null ? avgRating.toFixed(1) + "/5" : "No ratings yet"}
-- Average attendance: ${avgAttendance !== null ? avgAttendance.toFixed(0) + "%" : "No data yet"}
+HISTORY:
+Applications: ${totalJobs}
+Completed On Time: ${completedJobs}
+Avg Rating: ${avgRating ?? "None"}
+Avg Attendance: ${avgAttendance ?? "None"}
 
-RED FLAGS:
-${flags.length === 0 ? "None" : flags.map(f => `- ${f.reason} (severity: ${f.severity})`).join("\n")}
+FLAGS:
+${flags.length === 0 ? "None" : flags.map(f => f.reason).join(", ")}
 
-SCORING RULES (weights add to 100):
-1. locationScore (max 25): Based on profile completeness of location data. Full marks if location is complete and verified.
-2. liabilityScore (max 25): Completion rate, attendance, certifications, document uploads. New workers get 15/25 base.
-3. skillScore (max 20): Skills listed, education level, relevance. New workers score on profile alone.
-4. ratingScore (max 20): Average NGO rating. New workers (no ratings) get 12/20 — neutral score, not penalized.
-5. reliabilityScore (max 10): Consistency across jobs. New workers get 6/10 base.
-
-RED FLAG RULES:
-- Minor flag (harassment complaint): reduce total by 10, flag as warning
-- Moderate flag (abandonment, fraud): reduce total by 25, flag required
-- Severe flag (criminal activity, violence): set redFlagged=true, score=0
-
-Respond ONLY with valid JSON, no explanation:
+Return JSON:
 {
   "breakdown": {
-    "locationScore": <number 0-25>,
-    "liabilityScore": <number 0-25>,
-    "skillScore": <number 0-20>,
-    "ratingScore": <number 0-20>,
-    "reliabilityScore": <number 0-10>
+    "locationScore": number,
+    "liabilityScore": number,
+    "skillScore": number,
+    "ratingScore": number,
+    "reliabilityScore": number
   },
-  "redFlagged": <boolean>,
-  "redFlagReason": "<string or null>"
+  "redFlagged": boolean,
+  "redFlagReason": string|null
 }
 `
 
@@ -228,138 +220,113 @@ Respond ONLY with valid JSON, no explanation:
     const result = JSON.parse(raw)
 
     const breakdown: ScoreBreakdown = result.breakdown
-    const totalScore = Math.min(100, Math.max(0,
+
+    const totalScore = Math.min(
+        100,
         breakdown.locationScore +
         breakdown.liabilityScore +
         breakdown.skillScore +
         breakdown.ratingScore +
         breakdown.reliabilityScore
-    ))
-    const rank = getWorkerRank(totalScore)
+    )
 
     const workerScore: Omit<WorkerScore, "updatedAt"> = {
         workerId,
         workerName: worker.fullName || "Unknown",
         totalScore: Math.round(totalScore),
-        rank,
+        rank: getWorkerRank(totalScore),
         breakdown,
         redFlagged: result.redFlagged || false,
         redFlagReason: result.redFlagReason || undefined,
     }
 
-    // FIX: Replaced buggy addDoc+setDoc catch block with a single setDoc + merge:true.
-    // merge:true means: create the document if it doesn't exist, update it if it does.
-    // This avoids duplicate documents and never throws a "document not found" error.
     await setDoc(
         doc(db, "workerScores", workerId),
-        { ...workerScore, updatedAt: serverTimestamp() },
+        {
+            ...workerScore,
+            updatedAt: serverTimestamp(),
+        },
         { merge: true }
     )
 
-    return { ...workerScore, updatedAt: null }
+    return {
+        ...workerScore,
+        updatedAt: null,
+    }
 }
 
-// ── Score a Worker for a Specific Job ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// JOB SPECIFIC SCORE
+// ─────────────────────────────────────────────────────────────
 
 export async function scoreWorkerForJob(
     applicationId: string,
     workerId: string,
     jobId: string,
 ): Promise<JobApplicationScore> {
-    // Fetch worker, job, and global score in parallel
     const [workerSnap, jobSnap, scoreSnap] = await Promise.all([
         getDoc(doc(db, "users", workerId)),
         getDoc(doc(db, "jobs", jobId)),
         getDoc(doc(db, "workerScores", workerId)),
     ])
 
-    if (!workerSnap.exists() || !jobSnap.exists()) throw new Error("Worker or job not found")
+    if (!workerSnap.exists() || !jobSnap.exists()) {
+        throw new Error("Worker or Job not found")
+    }
 
     const worker = workerSnap.data()
     const job = jobSnap.data()
     const globalScore = scoreSnap.exists() ? scoreSnap.data() : null
 
-    // Check if worker is currently active on another job
     const activeJobsSnap = await getDocs(query(
         collection(db, "applications"),
         where("workerId", "==", workerId),
         where("status", "==", "accepted")
     ))
-    const activeJobs = activeJobsSnap.docs.length
-    const isPremiumWorker = worker.premiumWorker === true
-    const isOverloaded = !isPremiumWorker && activeJobs >= 1
 
-    const prompt = `
-You are a fair NGO job-matching AI. Score how well this worker fits THIS SPECIFIC JOB.
-Consider job-specific fit, not just global profile.
+    const isOverloaded =
+        worker.premiumWorker !== true &&
+        activeJobsSnap.docs.length >= 1
 
-JOB DETAILS:
-- Title: ${job.title}
-- Department: ${job.department}
-- Required Experience: ${job.experience}
-- Required Education: ${job.education}
-- Location: ${job.location}
-- Duration: ${job.duration}
-- Salary: ₹${job.salary}/month
-
-WORKER PROFILE:
-- Name: ${worker.fullName}
-- Location: ${worker.city}, ${worker.state}
-- Education: ${worker.education || "Not specified"}
-- Skills: ${worker.skills || "Not listed"}
-- Experience Level: ${worker.experience || "Fresher"}
-- Is Certified: ${worker.certified ? "YES" : "No"}
-- Global Score: ${globalScore ? globalScore.totalScore + "/100 (Rank " + globalScore.rank + ")" : "Not yet scored — treat as new"}
-- Currently on another job: ${isOverloaded ? "YES — already has active job" : "No"}
-
-SCORING CRITERIA for this specific job (0–100):
-- Location proximity/match to job site: 25 points
-- Skills match for this department: 20 points
-- Education meets requirement: 15 points
-- Experience level match: 15 points
-- Global reliability score adjusted: 15 points
-- Availability (not overloaded): 10 points
-
-IMPORTANT RULES:
-- If worker is overloaded (non-premium with active job): cap score at 30 and note in concerns
-- If worker's location is far from job location: reduce location points significantly
-- New workers with matching skills/education should still score 50–65
-- Do NOT penalize for being new — penalize only for mismatched skills or location
-
-Respond ONLY with valid JSON:
-{
-  "aiScore": <number 0-100>,
-  "matchReasons": ["<reason1>", "<reason2>", "<reason3>"],
-  "concerns": ["<concern1 or empty array>"],
-  "recommended": <boolean>
-}
-`
-
-    // FIX: Wrapped Gemini call in try/catch so errors are visible in console
-    // instead of silently failing and leaving applicationScores empty.
-    let result: {
-        aiScore: number
-        matchReasons: string[]
-        concerns: string[]
-        recommended: boolean
-    }
+    let result
 
     try {
-        const raw = await callGemini(prompt)
+        const raw = await callGemini(`
+Score fit for this job.
+
+JOB:
+${JSON.stringify(job)}
+
+WORKER:
+${JSON.stringify(worker)}
+
+Global Score:
+${globalScore?.totalScore || "None"}
+
+Overloaded:
+${isOverloaded}
+
+Return JSON:
+{
+  "aiScore": number,
+  "matchReasons": string[],
+  "concerns": string[],
+  "recommended": boolean
+}
+`)
         result = JSON.parse(raw)
     } catch (err) {
-        console.error("scoreWorkerForJob — Gemini call failed:", err)
-        // Fallback: assign a neutral score so the application still appears
-       result = {
-    aiScore: 50,
-    matchReasons: ["Score unavailable — AI service error, using default"],
-    concerns: ["Could not reach AI API — check VITE_OPENROUTER_API_KEY"],
-    recommended: false,
-}
+        console.error("Gemini scoring failed:", err)
+
+        result = {
+            aiScore: 50,
+            matchReasons: ["AI unavailable — fallback score applied"],
+            concerns: ["Check Gemini API key / quota / billing"],
+            recommended: false,
+        }
     }
 
-    const aiScore = Math.min(100, Math.max(0, Math.round(result.aiScore)))
-    const rank = getWorkerRank(aiScore)
+    const aiScore = Math.round(Math.min(100, Math.max(0, result.aiScore)))
 
     const appScore: Omit<JobApplicationScore, "scoredAt"> = {
         applicationId,
@@ -367,24 +334,31 @@ Respond ONLY with valid JSON:
         workerName: worker.fullName || "Unknown",
         jobId,
         aiScore,
-        rank,
+        rank: getWorkerRank(aiScore),
         breakdown: globalScore?.breakdown ?? null,
         matchReasons: result.matchReasons || [],
         concerns: result.concerns || [],
         recommended: result.recommended || false,
     }
 
-    // Save to Firestore — use setDoc with merge:true for safety
     await setDoc(
         doc(db, "applicationScores", applicationId),
-        { ...appScore, scoredAt: serverTimestamp() },
+        {
+            ...appScore,
+            scoredAt: serverTimestamp(),
+        },
         { merge: true }
     )
 
-    return { ...appScore, scoredAt: null }
+    return {
+        ...appScore,
+        scoredAt: null,
+    }
 }
 
-// ── Rate Worker After Job Completion ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// RATE WORKER AFTER JOB
+// ─────────────────────────────────────────────────────────────
 
 export async function rateWorkerAfterJob(input: WorkerRatingInput): Promise<void> {
     await addDoc(collection(db, "workerRatings"), {
@@ -416,99 +390,109 @@ export async function rateWorkerAfterJob(input: WorkerRatingInput): Promise<void
     await computeWorkerGlobalScore(input.workerId)
 }
 
-// ── Fetch Scored Applications for a Job (NGO view) ────────────────────────────
-// FIX: Removed where("status", "==", "pending") from the Firestore query.
-// That second `where` clause requires a composite index (jobId + status) which
-// wasn't created. We now fetch ALL applications for the job and filter
-// client-side — no extra index needed, and NGOs can still see all statuses.
+// ─────────────────────────────────────────────────────────────
+// FETCH SCORED APPLICATIONS
+// ─────────────────────────────────────────────────────────────
 
-export async function fetchScoredApplications(jobId: string): Promise<{
-    application: Record<string, unknown>
-    score: JobApplicationScore | null
-}[]> {
-    // Single-field query — no composite index required
+export async function fetchScoredApplications(jobId: string) {
     const appsSnap = await getDocs(query(
         collection(db, "applications"),
         where("jobId", "==", jobId)
     ))
 
-    // Client-side filter: only show pending applications in the AI panel
-    const pendingDocs = appsSnap.docs.filter(d => d.data().status === "pending")
-
-    console.log(`fetchScoredApplications: found ${appsSnap.docs.length} total, ${pendingDocs.length} pending for jobId=${jobId}`)
+    const pendingDocs =
+        appsSnap.docs.filter(d => d.data().status === "pending")
 
     const results = await Promise.all(
         pendingDocs.map(async (appDoc) => {
-            const application = { id: appDoc.id, ...appDoc.data() }
             const scoreSnap = await getDoc(doc(db, "applicationScores", appDoc.id))
-            const score = scoreSnap.exists()
-                ? { applicationId: appDoc.id, ...scoreSnap.data() } as JobApplicationScore
-                : null
-            return { application, score }
+
+            return {
+                application: { id: appDoc.id, ...appDoc.data() },
+                score: scoreSnap.exists()
+                    ? scoreSnap.data() as JobApplicationScore
+                    : null,
+            }
         })
     )
 
-    // Sort by AI score descending (unscored apps go to the bottom)
-    return results.sort((a, b) => (b.score?.aiScore || 0) - (a.score?.aiScore || 0))
+    return results.sort(
+        (a, b) => (b.score?.aiScore || 0) - (a.score?.aiScore || 0)
+    )
 }
 
-// ── Fetch a Worker's Own Score ────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// FETCH SINGLE WORKER SCORE
+// ─────────────────────────────────────────────────────────────
 
-export async function fetchWorkerScore(workerId: string): Promise<WorkerScore | null> {
+export async function fetchWorkerScore(workerId: string) {
     const snap = await getDoc(doc(db, "workerScores", workerId))
-    if (!snap.exists()) return null
-    return snap.data() as WorkerScore
+    return snap.exists() ? snap.data() as WorkerScore : null
 }
 
-// ── Hungarian Algorithm — Optimal Job Assignment ──────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// HUNGARIAN ASSIGNMENT
+// ─────────────────────────────────────────────────────────────
 
 export function hungarianAssign(
     workers: string[],
     jobs: string[],
     costMatrix: number[][]
-): { workerId: string; jobId: string; score: number }[] {
-    const assigned: { workerId: string; jobId: string; score: number }[] = []
+) {
+    const assigned = []
     const usedWorkers = new Set<number>()
     const usedJobs = new Set<number>()
 
-    const pairs: { i: number; j: number; score: number }[] = []
+    const pairs = []
+
     for (let i = 0; i < workers.length; i++) {
         for (let j = 0; j < jobs.length; j++) {
-            pairs.push({ i, j, score: costMatrix[i]?.[j] ?? 0 })
+            pairs.push({
+                i,
+                j,
+                score: costMatrix[i]?.[j] ?? 0,
+            })
         }
     }
+
     pairs.sort((a, b) => b.score - a.score)
 
-    for (const { i, j, score } of pairs) {
-        if (!usedWorkers.has(i) && !usedJobs.has(j)) {
-            assigned.push({ workerId: workers[i], jobId: jobs[j], score })
-            usedWorkers.add(i)
-            usedJobs.add(j)
+    for (const pair of pairs) {
+        if (!usedWorkers.has(pair.i) && !usedJobs.has(pair.j)) {
+            assigned.push({
+                workerId: workers[pair.i],
+                jobId: jobs[pair.j],
+                score: pair.score,
+            })
+
+            usedWorkers.add(pair.i)
+            usedJobs.add(pair.j)
         }
     }
 
     return assigned
 }
 
-// ── Trigger scoring when worker applies ──────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// TRIGGER ON APPLY
+// ─────────────────────────────────────────────────────────────
 
 export async function onWorkerApplied(
     applicationId: string,
     workerId: string,
     jobId: string,
-): Promise<void> {
+) {
     try {
-        // Compute global score if not exists
         const scoreSnap = await getDoc(doc(db, "workerScores", workerId))
+
         if (!scoreSnap.exists()) {
             await computeWorkerGlobalScore(workerId)
         }
-        // Compute job-specific score
+
         await scoreWorkerForJob(applicationId, workerId, jobId)
-        console.log(`✅ Scoring complete for applicationId=${applicationId}`)
+
+        console.log("✅ Scoring complete")
     } catch (err) {
-        // FIX: Log the full error so it's visible in console during development
-        console.error("onWorkerApplied — scoring failed (non-blocking):", err)
-        // Scoring errors never block the application process
+        console.error("onWorkerApplied failed:", err)
     }
 }

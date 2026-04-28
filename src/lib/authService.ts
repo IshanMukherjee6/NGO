@@ -1,4 +1,5 @@
 // src/lib/authService.ts
+
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -6,15 +7,21 @@ import {
     updateProfile,
     type UserCredential,
 } from "firebase/auth"
+
 import {
     doc,
     setDoc,
     getDoc,
     serverTimestamp,
 } from "firebase/firestore"
+
 import { auth, db } from "./firebase"
 
 export type UserRole = "ngo" | "worker"
+
+/* -------------------------------------------------------------------------- */
+/*                               NGO PROFILE TYPE                             */
+/* -------------------------------------------------------------------------- */
 
 export interface NGOProfile {
     uid: string
@@ -27,10 +34,50 @@ export interface NGOProfile {
     darpanId: string
     username: string
     email: string
-    ngoEmail: string          // real contact email
+    ngoEmail: string
     isPremium: boolean
     createdAt: unknown
 }
+
+/* -------------------------------------------------------------------------- */
+/*                        WORKER QUALIFICATION ENUMS                           */
+/* -------------------------------------------------------------------------- */
+
+export type EducationLevel =
+    | "8th Pass"
+    | "10th Pass"
+    | "12th Pass"
+    | "Graduate"
+    | "Post Graduate"
+
+export type ExperienceLevel =
+    | "Fresher"
+    | "0-1 years"
+    | "1-2 years"
+    | "2-3 years"
+    | "3-5 years"
+    | "5+ years"
+
+export const EDUCATION_OPTIONS: EducationLevel[] = [
+    "8th Pass",
+    "10th Pass",
+    "12th Pass",
+    "Graduate",
+    "Post Graduate",
+]
+
+export const EXPERIENCE_OPTIONS: ExperienceLevel[] = [
+    "Fresher",
+    "0-1 years",
+    "1-2 years",
+    "2-3 years",
+    "3-5 years",
+    "5+ years",
+]
+
+/* -------------------------------------------------------------------------- */
+/*                             WORKER PROFILE TYPE                            */
+/* -------------------------------------------------------------------------- */
 
 export interface WorkerProfile {
     uid: string
@@ -38,7 +85,7 @@ export interface WorkerProfile {
     fullName: string
     age: string
     phone: string
-    email: string             // real contact email
+    email: string
     panNumber: string
     country: string
     state: string
@@ -46,36 +93,83 @@ export interface WorkerProfile {
     district: string
     username: string
     firebaseEmail: string
+
+    // Qualification Fields
+    education?: EducationLevel
+    experience?: ExperienceLevel
+    skills?: string[]
+
+    // Lifecycle / Ranking Flags
+    certified?: boolean
+    documentsVerified?: boolean
+    premiumWorker?: boolean
+
     createdAt: unknown
 }
 
 export type UserProfile = NGOProfile | WorkerProfile
 
-// ── DARPAN ID validation ───────────────────────────────────────────────────
-// Format: XX/YYYY/NNNNNNN  (2-letter state code / 4-digit year / 7-digit number)
+/* -------------------------------------------------------------------------- */
+/*                          DARPAN ID VALIDATION                              */
+/* -------------------------------------------------------------------------- */
+
 const DARPAN_REGEX = /^[A-Z]{2}\/\d{4}\/\d{7}$/
 
-export function validateDarpanId(id: string): { valid: boolean; message: string } {
+export function validateDarpanId(
+    id: string
+): { valid: boolean; message: string } {
     const trimmed = id.trim().toUpperCase()
-    if (!trimmed) return { valid: false, message: "DARPAN ID is required." }
+
+    if (!trimmed) {
+        return {
+            valid: false,
+            message: "DARPAN ID is required.",
+        }
+    }
+
     if (!DARPAN_REGEX.test(trimmed)) {
         return {
             valid: false,
-            message: "Invalid DARPAN ID. Expected format: GJ/2021/0123456 (state/year/7 digits).",
+            message:
+                "Invalid DARPAN ID. Expected format: GJ/2021/0123456 (state/year/7 digits).",
         }
     }
+
     const year = parseInt(trimmed.split("/")[1])
-    if (year < 2000 || year > new Date().getFullYear()) {
-        return { valid: false, message: `Year in DARPAN ID must be between 2000 and ${new Date().getFullYear()}.` }
+
+    if (
+        year < 2000 ||
+        year > new Date().getFullYear()
+    ) {
+        return {
+            valid: false,
+            message: `Year in DARPAN ID must be between 2000 and ${new Date().getFullYear()}.`,
+        }
     }
-    return { valid: true, message: "Valid DARPAN ID format." }
+
+    return {
+        valid: true,
+        message: "Valid DARPAN ID format.",
+    }
 }
 
-export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+/* -------------------------------------------------------------------------- */
+/*                           GET USER PROFILE                                 */
+/* -------------------------------------------------------------------------- */
+
+export async function getUserProfile(
+    uid: string
+): Promise<UserProfile | null> {
     const snap = await getDoc(doc(db, "users", uid))
+
     if (!snap.exists()) return null
+
     return snap.data() as UserProfile
 }
+
+/* -------------------------------------------------------------------------- */
+/*                             REGISTER NGO                                   */
+/* -------------------------------------------------------------------------- */
 
 export async function registerNGO(data: {
     ngoName: string
@@ -88,10 +182,22 @@ export async function registerNGO(data: {
     password: string
     ngoEmail: string
 }): Promise<UserCredential> {
-    const email = `${data.username.toLowerCase().replace(/\s+/g, "")}@ngo.ngoconnect.app`
-    const credential = await createUserWithEmailAndPassword(auth, email, data.password)
+    const email =
+        `${data.username.toLowerCase().replace(/\s+/g, "")}` +
+        "@ngo.ngoconnect.app"
+
+    const credential =
+        await createUserWithEmailAndPassword(
+            auth,
+            email,
+            data.password
+        )
+
     const { user } = credential
-    await updateProfile(user, { displayName: data.ngoName })
+
+    await updateProfile(user, {
+        displayName: data.ngoName,
+    })
 
     const profile: NGOProfile = {
         uid: user.uid,
@@ -108,9 +214,15 @@ export async function registerNGO(data: {
         isPremium: false,
         createdAt: serverTimestamp(),
     }
+
     await setDoc(doc(db, "users", user.uid), profile)
+
     return credential
 }
+
+/* -------------------------------------------------------------------------- */
+/*                           REGISTER WORKER                                  */
+/* -------------------------------------------------------------------------- */
 
 export async function registerWorker(data: {
     fullName: string
@@ -124,11 +236,27 @@ export async function registerWorker(data: {
     district: string
     username: string
     password: string
+
+    education: EducationLevel
+    experience: ExperienceLevel
+    skills: string[]
 }): Promise<UserCredential> {
-    const firebaseEmail = `${data.username.toLowerCase().replace(/\s+/g, "")}@worker.ngoconnect.app`
-    const credential = await createUserWithEmailAndPassword(auth, firebaseEmail, data.password)
+    const firebaseEmail =
+        `${data.username.toLowerCase().replace(/\s+/g, "")}` +
+        "@worker.ngoconnect.app"
+
+    const credential =
+        await createUserWithEmailAndPassword(
+            auth,
+            firebaseEmail,
+            data.password
+        )
+
     const { user } = credential
-    await updateProfile(user, { displayName: data.fullName })
+
+    await updateProfile(user, {
+        displayName: data.fullName,
+    })
 
     const profile: WorkerProfile = {
         uid: user.uid,
@@ -144,25 +272,72 @@ export async function registerWorker(data: {
         district: data.district,
         username: data.username,
         firebaseEmail,
+
+        education: data.education,
+        experience: data.experience,
+        skills: data.skills,
+
+        certified: false,
+        documentsVerified: false,
+        premiumWorker: false,
+
         createdAt: serverTimestamp(),
     }
+
     await setDoc(doc(db, "users", user.uid), profile)
+
     return credential
 }
 
-export async function loginUser(username: string, password: string): Promise<UserProfile> {
+/* -------------------------------------------------------------------------- */
+/*                               LOGIN USER                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function loginUser(
+    username: string,
+    password: string
+): Promise<UserProfile> {
     let credential: UserCredential | null = null
-    const ngoEmail = `${username.toLowerCase().replace(/\s+/g, "")}@ngo.ngoconnect.app`
-    const workerEmail = `${username.toLowerCase().replace(/\s+/g, "")}@worker.ngoconnect.app`
+
+    const cleanedUsername =
+        username.toLowerCase().replace(/\s+/g, "")
+
+    const ngoEmail =
+        `${cleanedUsername}@ngo.ngoconnect.app`
+
+    const workerEmail =
+        `${cleanedUsername}@worker.ngoconnect.app`
+
     try {
-        credential = await signInWithEmailAndPassword(auth, ngoEmail, password)
+        credential =
+            await signInWithEmailAndPassword(
+                auth,
+                ngoEmail,
+                password
+            )
     } catch {
-        credential = await signInWithEmailAndPassword(auth, workerEmail, password)
+        credential =
+            await signInWithEmailAndPassword(
+                auth,
+                workerEmail,
+                password
+            )
     }
-    const profile = await getUserProfile(credential.user.uid)
-    if (!profile) throw new Error("User profile not found.")
+
+    const profile = await getUserProfile(
+        credential.user.uid
+    )
+
+    if (!profile) {
+        throw new Error("User profile not found.")
+    }
+
     return profile
 }
+
+/* -------------------------------------------------------------------------- */
+/*                               LOGOUT USER                                  */
+/* -------------------------------------------------------------------------- */
 
 export async function logoutUser(): Promise<void> {
     await signOut(auth)

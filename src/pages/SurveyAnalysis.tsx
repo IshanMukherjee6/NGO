@@ -20,7 +20,6 @@ import {
     FolderPlus, Folder, ChevronRight, X, Loader2,
     MapPin, Calendar, Hash, ArrowLeft,
 } from "lucide-react"
-import { STATES, getDistricts, getSubDistricts } from "../lib/indiaLocationData"
 import { INDIA_LOCATION_DATA } from "../lib/indiaLocationData"
 import {
     Select,
@@ -29,6 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+
 const inputCls =
     "w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-sm text-foreground " +
     "placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring " +
@@ -53,16 +53,17 @@ function CreateFolderModal({
         block: "",
         wardNo: "",
     })
-    const states = Object.keys(INDIA_LOCATION_DATA)
 
+    // Derived options from cascading location data
+    const states = Object.keys(INDIA_LOCATION_DATA)
     const districts = form.state
         ? Object.keys(INDIA_LOCATION_DATA[form.state] || {})
         : []
-
     const subDistricts =
         form.state && form.district
             ? INDIA_LOCATION_DATA[form.state][form.district] || []
             : []
+
     const setField = (k: string, v: string) =>
         setForm(prev => ({ ...prev, [k]: v }))
 
@@ -87,10 +88,8 @@ function CreateFolderModal({
         }
     }
 
-    const fields: { key: keyof typeof form; label: string; placeholder: string }[] = [
-        { key: "state", label: "State", placeholder: "e.g. Maharashtra" },
-        { key: "district", label: "District", placeholder: "e.g. Pune" },
-        { key: "subDistrict", label: "Sub-district", placeholder: "e.g. Haveli" },
+    // Plain-input fields (Block & Ward No. have no dropdown data source)
+    const plainFields: { key: "block" | "wardNo"; label: string; placeholder: string }[] = [
         { key: "block", label: "Block", placeholder: "e.g. Khed" },
         { key: "wardNo", label: "Ward No.", placeholder: "e.g. 14" },
     ]
@@ -120,7 +119,8 @@ function CreateFolderModal({
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="px-7 py-6 flex flex-col gap-4">
-                    {/* State */}
+
+                    {/* State — cascading dropdown */}
                     <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-foreground">
                             State <span className="text-red-500">*</span>
@@ -128,12 +128,7 @@ function CreateFolderModal({
                         <Select
                             value={form.state}
                             onValueChange={(value) =>
-                                setForm({
-                                    ...form,
-                                    state: value,
-                                    district: "",
-                                    subDistrict: "",
-                                })
+                                setForm({ ...form, state: value, district: "", subDistrict: "" })
                             }
                         >
                             <SelectTrigger className={inputCls}>
@@ -141,15 +136,13 @@ function CreateFolderModal({
                             </SelectTrigger>
                             <SelectContent>
                                 {states.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {s}
-                                    </SelectItem>
+                                    <SelectItem key={s} value={s}>{s}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
 
-                    {/* District */}
+                    {/* District — cascading dropdown, depends on state */}
                     <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-foreground">
                             District <span className="text-red-500">*</span>
@@ -157,11 +150,7 @@ function CreateFolderModal({
                         <Select
                             value={form.district}
                             onValueChange={(value) =>
-                                setForm({
-                                    ...form,
-                                    district: value,
-                                    subDistrict: "",
-                                })
+                                setForm({ ...form, district: value, subDistrict: "" })
                             }
                             disabled={!form.state}
                         >
@@ -170,15 +159,13 @@ function CreateFolderModal({
                             </SelectTrigger>
                             <SelectContent>
                                 {districts.map((d) => (
-                                    <SelectItem key={d} value={d}>
-                                        {d}
-                                    </SelectItem>
+                                    <SelectItem key={d} value={d}>{d}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
 
-                    {/* Sub-district */}
+                    {/* Sub-district — cascading dropdown, depends on district */}
                     <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-foreground">
                             Sub-district <span className="text-red-500">*</span>
@@ -193,37 +180,28 @@ function CreateFolderModal({
                             </SelectTrigger>
                             <SelectContent>
                                 {subDistricts.map((sd) => (
-                                    <SelectItem key={sd} value={sd}>
-                                        {sd}
-                                    </SelectItem>
+                                    <SelectItem key={sd} value={sd}>{sd}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
 
-                    {/* Block */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-foreground">
-                            Block <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            value={form.block}
-                            onChange={(e) => setField("block", e.target.value)}
-                            className={inputCls}
-                        />
-                    </div>
+                    {/* Block & Ward No. — plain text inputs (no dropdown source) */}
+                    {plainFields.map(({ key, label, placeholder }) => (
+                        <div key={key} className="flex flex-col gap-1.5">
+                            <label className="text-sm font-medium text-foreground">
+                                {label} <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                value={form[key]}
+                                onChange={e => setField(key, e.target.value)}
+                                placeholder={placeholder}
+                                required
+                                className={inputCls}
+                            />
+                        </div>
+                    ))}
 
-                    {/* Ward */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-foreground">
-                            Ward No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            value={form.wardNo}
-                            onChange={(e) => setField("wardNo", e.target.value)}
-                            className={inputCls}
-                        />
-                    </div>
                     <Button
                         type="submit"
                         disabled={loading}

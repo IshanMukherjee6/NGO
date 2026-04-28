@@ -4,6 +4,8 @@
 //   • Filters now match Dashboard exactly: minSalary, experience, department, location
 //   • Email shown beside phone in worker info (where applicable)
 //   • Alert shown on apply success
+//   • Profile completeness guard: blocks apply if education/experience/skills missing
+//   • Qualification snapshot: persists worker qualifications onto the application doc
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react"
@@ -58,6 +60,7 @@ function LoginPrompt({ onClose }: { onClose: () => void }) {
 
 const DEPARTMENTS = ["Operations", "Health", "Training", "Admin", "Finance", "Research"]
 const EXPERIENCE_OPTIONS = ["Fresher", "0-1 years", "1-2 years", "2-3 years", "3-5 years", "5+ years"]
+
 function FilterSelect({
     label,
     value,
@@ -76,7 +79,6 @@ function FilterSelect({
             <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 {label}
             </label>
-
             <select
                 value={value}
                 onChange={(e) => onValueChange(e.target.value)}
@@ -87,10 +89,8 @@ function FilterSelect({
                 bg-[#222]/80
                 text-sm
                 px-3
-
                 hover:bg-[#2a2a2a]
                 focus:ring-2 focus:ring-white/20
-
                 transition-all
                 "
             >
@@ -104,6 +104,7 @@ function FilterSelect({
         </div>
     )
 }
+
 export default function Jobs() {
     const navigate = useNavigate()
     const { currentUser, userProfile } = useAuth()
@@ -166,6 +167,20 @@ export default function Jobs() {
 
         setApplyingJobId(job.id)
         const workerProfile = userProfile as WorkerProfile
+
+        // Profile completeness guard — workers from before the qualifications
+        // migration may have undefined values. Letting them apply would
+        // re-introduce the original bug (every application scored against
+        // empty fields → all 50s).
+        if (!workerProfile.education || !workerProfile.experience || !workerProfile.skills?.length) {
+            setApplyingJobId(null)
+            showToast(
+                "Please complete your profile (education, experience, skills) before applying.",
+                "error",
+            )
+            return
+        }
+
         try {
             await applyForJob(
                 { id: job.id, title: job.title, postedBy: job.postedBy, ngoName: job.ngoName },
@@ -175,6 +190,15 @@ export default function Jobs() {
                     phone: workerProfile.phone,
                     email: workerProfile.email || "",
                     location: `${workerProfile.city}, ${workerProfile.state}`,
+                    // Qualification snapshot — same values that get scored.
+                    // The NGO panel can show them without re-fetching the user,
+                    // and the snapshot is stable even if the worker edits their
+                    // profile later.
+                    city: workerProfile.city,
+                    state: workerProfile.state,
+                    education: workerProfile.education,
+                    experience: workerProfile.experience,
+                    skills: workerProfile.skills,
                 }
             )
             setAppliedJobIds(prev => new Set([...prev, job.id]))
@@ -203,16 +227,12 @@ export default function Jobs() {
                             placeholder="Search by title, NGO, department or location..."
                             className="
                                         w-full pl-9 pr-4 py-2.5 rounded-xl
-
                                         bg-[#222]/80
                                         border border-white/10
-
                                         text-sm text-foreground
                                         placeholder:text-muted-foreground
-
                                         hover:bg-[#2a2a2a]
                                         focus:ring-2 focus:ring-white/20
-
                                         transition-all
 " />
                     </div>
@@ -223,7 +243,7 @@ export default function Jobs() {
                     </Button>
                 </div>
 
-                {/* Filters panel — matches Dashboard exactly */}
+                {/* Filters panel */}
                 {showFilters && (
                     <div
                         className="
@@ -231,9 +251,7 @@ export default function Jobs() {
         border border-white/10
         rounded-2xl
         p-5 mb-5
-
         grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4
-
         backdrop-blur-md
         shadow-[0_8px_30px_rgba(0,0,0,0.6)]
     "
@@ -243,7 +261,6 @@ export default function Jobs() {
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 Min. Salary (₹)
                             </label>
-
                             <SalaryInput
                                 value={filters.minSalary}
                                 onChange={(val) =>
@@ -260,10 +277,7 @@ export default function Jobs() {
                                 setFilters((p) => ({ ...p, experience: v }))
                             }
                             placeholder="Any experience"
-                            options={EXPERIENCE_OPTIONS.map((e) => ({
-                                label: e,
-                                value: e,
-                            }))}
+                            options={EXPERIENCE_OPTIONS.map((e) => ({ label: e, value: e }))}
                         />
 
                         {/* Department */}
@@ -274,10 +288,7 @@ export default function Jobs() {
                                 setFilters((p) => ({ ...p, department: v }))
                             }
                             placeholder="Any department"
-                            options={DEPARTMENTS.map((d) => ({
-                                label: d,
-                                value: d,
-                            }))}
+                            options={DEPARTMENTS.map((d) => ({ label: d, value: d }))}
                         />
 
                         {/* Location */}
@@ -285,28 +296,20 @@ export default function Jobs() {
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 Location
                             </label>
-
                             <input
                                 value={filters.location}
                                 onChange={(e) =>
-                                    setFilters((p) => ({
-                                        ...p,
-                                        location: e.target.value,
-                                    }))
+                                    setFilters((p) => ({ ...p, location: e.target.value }))
                                 }
                                 placeholder="e.g. Mumbai"
                                 className="
                 h-11 px-3 rounded-xl
-
                 bg-[#222]/80
                 border border-white/10
-
                 text-sm text-foreground
                 placeholder:text-muted-foreground
-
                 hover:bg-[#2a2a2a]
                 focus:ring-2 focus:ring-white/20
-
                 transition-all
                 "
                             />
@@ -346,8 +349,7 @@ export default function Jobs() {
                                 {filteredJobs.map(job => {
                                     const applied = appliedJobIds.has(job.id)
                                     return (
-                                        <div key={job.id} className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-5 hover:border-white/20 hover:shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:scale-[1.01]
-                                        transition-all duration-300">
+                                        <div key={job.id} className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-5 hover:border-white/20 hover:shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:scale-[1.01] transition-all duration-300">
                                             <div className="flex items-start justify-between gap-4">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 flex-wrap mb-1">

@@ -4,10 +4,21 @@ import { useNavigate, Link } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import { useToast } from "../context/ToastContext"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, ChevronDown, Loader2, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, ChevronDown, Loader2, Eye, EyeOff, X, Plus } from "lucide-react"
 import { INDIA_DATA } from "../lib/indiaData"
+import {
+    EDUCATION_OPTIONS,
+    EXPERIENCE_OPTIONS,
+    type EducationLevel,
+    type ExperienceLevel,
+} from "../lib/authService"
 
-const PAN_TYPE_CHARS = new Set(["P","C","H","F","A","T","B","L","J","G"])
+const SKILL_SUGGESTIONS = [
+    "First Aid", "Local Language", "Two-wheeler Licence", "Computer Basic",
+    "Teaching", "Cooking", "Driving", "Counselling", "Fundraising",
+    "Data Entry", "Photography", "Field Survey", "Childcare", "Sanitation",
+]
+
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
 const PAN_REGEX = /^[A-Z]{3}[PCHFATBLJG][A-Z][0-9]{4}[A-Z]$/
 
@@ -39,12 +50,16 @@ function LocationSelect({ placeholder, options, value, onChange, disabled }: {
     )
 }
 
-function StepIndicator({ step }: { step: 1 | 2 }) {
+function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
     return (
         <div className="flex items-center gap-3 mb-8">
-            {[{ n: 1, label: "Personal Details" }, { n: 2, label: "Account Setup" }].map(({ n, label }, i) => (
+            {[
+                { n: 1, label: "Personal Details" },
+                { n: 2, label: "Qualifications" },
+                { n: 3, label: "Account Setup" },
+            ].map(({ n, label }, i) => (
                 <div key={n} className="flex items-center gap-2">
-                    {i > 0 && <div className={`h-px w-10 ${step > 1 ? "bg-white/60" : "bg-white/20"}`} />}
+                    {i > 0 && <div className={`h-px w-10 ${step > (n - 1) ? "bg-white/60" : "bg-white/20"}`} />}
                     <div className="flex items-center gap-2">
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === n ? "bg-white text-black" : step > n ? "bg-white/70 text-black" : "bg-white/10 text-white/50"}`}>{n}</div>
                         <span className={`text-sm ${step === n ? "text-white font-semibold" : "text-white/40"}`}>{label}</span>
@@ -72,11 +87,12 @@ export default function RegisterWorker() {
     const { showToast } = useToast()
     const navigate = useNavigate()
 
-    const [step, setStep] = useState<1 | 2>(1)
+    const [step, setStep] = useState<1 | 2 | 3>(1)
     const [loading, setLoading] = useState(false)
     const [showPass, setShowPass] = useState(false)
     const [showConfirm, setShowConfirm] = useState(false)
 
+    // Step 1 — Personal Details
     const [fullName, setFullName] = useState("")
     const [age, setAge] = useState("")
     const [phone, setPhone] = useState("")
@@ -86,9 +102,18 @@ export default function RegisterWorker() {
     const [state, setState] = useState("")
     const [district, setDistrict] = useState("")
     const [city, setCity] = useState("")
+
+    // Step 2 — Qualifications
+    const [education, setEducation] = useState<EducationLevel | "">("")
+    const [experience, setExperience] = useState<ExperienceLevel | "">("")
+    const [skills, setSkills] = useState<string[]>([])
+    const [skillInput, setSkillInput] = useState("")
+
+    // Step 3 — Account Setup
     const [username, setUsername] = useState("")
     const [password, setPassword] = useState("")
     const [confirmPass, setConfirmPass] = useState("")
+
     const [errors, setErrors] = useState<Record<string, string>>({})
 
     const stateOptions = Object.keys(INDIA_DATA).sort()
@@ -103,6 +128,17 @@ export default function RegisterWorker() {
         setPanRaw(upper)
         if (errors.pan) setErrors(prev => { const e = { ...prev }; delete e.pan; return e })
     }
+
+    const addSkill = (raw: string) => {
+        const trimmed = raw.trim()
+        if (!trimmed) return
+        const exists = skills.some(s => s.toLowerCase() === trimmed.toLowerCase())
+        if (exists) { setSkillInput(""); return }
+        setSkills(prev => [...prev, trimmed])
+        setSkillInput("")
+        if (errors.skills) setErrors(prev => { const e = { ...prev }; delete e.skills; return e })
+    }
+    const removeSkill = (s: string) => setSkills(prev => prev.filter(x => x !== s))
 
     const validateStep1 = (): boolean => {
         const errs: Record<string, string> = {}
@@ -125,6 +161,15 @@ export default function RegisterWorker() {
 
     const validateStep2 = (): boolean => {
         const errs: Record<string, string> = {}
+        if (!education) errs.education = "Please select your highest education."
+        if (!experience) errs.experience = "Please select your experience level."
+        if (skills.length === 0) errs.skills = "Add at least one skill."
+        setErrors(errs)
+        return Object.keys(errs).length === 0
+    }
+
+    const validateStep3 = (): boolean => {
+        const errs: Record<string, string> = {}
         if (!username.trim() || username.length < 4) errs.username = "Username must be at least 4 characters."
         if (!PASSWORD_REGEX.test(password)) {
             errs.password = "Password must be 8+ chars with uppercase, lowercase, number, and special character."
@@ -134,17 +179,23 @@ export default function RegisterWorker() {
         return Object.keys(errs).length === 0
     }
 
-    const handleContinue = () => { if (validateStep1()) setStep(2) }
+    const handleContinueFromStep1 = () => { if (validateStep1()) setStep(2) }
+    const handleContinueFromStep2 = () => { if (validateStep2()) setStep(3) }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!validateStep2()) return
+        if (!validateStep3()) return
+        // Re-validate step 2 defensively in case user navigated back and cleared fields
+        if (!validateStep2()) { setStep(2); return }
         setLoading(true)
         try {
             await signUpWorker({
                 fullName: fullName.trim(), age, phone, email,
                 panNumber: panRaw, country, state, city, district,
                 username: username.trim(), password,
+                education: education as EducationLevel,
+                experience: experience as ExperienceLevel,
+                skills,
             })
             showToast("Account created successfully!", "success")
             navigate("/dashboard")
@@ -166,6 +217,7 @@ export default function RegisterWorker() {
                 <p className="text-white/50 text-sm mb-8">Set up your profile and account.</p>
                 <StepIndicator step={step} />
 
+                {/* ── STEP 1: Personal Details ── */}
                 {step === 1 ? (
                     <div className="flex flex-col gap-5">
                         <div className="grid grid-cols-2 gap-4">
@@ -229,9 +281,96 @@ export default function RegisterWorker() {
                             </div>
                         </div>
 
-                        <Button onClick={handleContinue} className="w-full rounded-2xl h-12 font-semibold mt-2">Continue →</Button>
+                        <Button onClick={handleContinueFromStep1} className="w-full rounded-2xl h-12 font-semibold mt-2">Continue →</Button>
                     </div>
+
+                ) : step === 2 ? (
+                    /* ── STEP 2: Qualifications ── */
+                    <div className="flex flex-col gap-5">
+                        <div>
+                            <p className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-3">Education & Experience</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Field label="Highest Education" error={errors.education}>
+                                    <LocationSelect
+                                        placeholder="Select"
+                                        options={[...EDUCATION_OPTIONS]}
+                                        value={education}
+                                        onChange={(v) => {
+                                            setEducation(v as EducationLevel)
+                                            if (errors.education) setErrors(prev => { const e = { ...prev }; delete e.education; return e })
+                                        }}
+                                    />
+                                </Field>
+                                <Field label="Experience Level" error={errors.experience}>
+                                    <LocationSelect
+                                        placeholder="Select"
+                                        options={[...EXPERIENCE_OPTIONS]}
+                                        value={experience}
+                                        onChange={(v) => {
+                                            setExperience(v as ExperienceLevel)
+                                            if (errors.experience) setErrors(prev => { const e = { ...prev }; delete e.experience; return e })
+                                        }}
+                                    />
+                                </Field>
+                            </div>
+                        </div>
+
+                        <Field label="Skills (add at least one)" error={errors.skills}>
+                            <div className={`${inputCls} min-h-12 flex flex-wrap items-center gap-2 ${errors.skills ? "border-red-500/50" : ""}`}>
+                                {skills.map(s => (
+                                    <span key={s} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 text-xs text-white">
+                                        {s}
+                                        <button
+                                            type="button"
+                                            onClick={() => removeSkill(s)}
+                                            className="text-white/50 hover:text-white"
+                                            aria-label={`Remove ${s}`}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                                <input
+                                    value={skillInput}
+                                    onChange={e => setSkillInput(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === "Enter" || e.key === ",") {
+                                            e.preventDefault()
+                                            addSkill(skillInput)
+                                        } else if (e.key === "Backspace" && !skillInput && skills.length > 0) {
+                                            removeSkill(skills[skills.length - 1])
+                                        }
+                                    }}
+                                    placeholder={skills.length === 0 ? "Type a skill and press Enter" : "Add another…"}
+                                    className="flex-1 min-w-[140px] bg-transparent outline-none text-sm placeholder:text-white/30"
+                                />
+                            </div>
+                            <p className="text-xs text-white/25 mt-1.5">Press Enter or comma to add. Suggestions:</p>
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                {SKILL_SUGGESTIONS
+                                    .filter(s => !skills.some(picked => picked.toLowerCase() === s.toLowerCase()))
+                                    .map(s => (
+                                        <button
+                                            type="button"
+                                            key={s}
+                                            onClick={() => addSkill(s)}
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-white/15 text-xs text-white/70 hover:border-white/40 hover:text-white transition-colors"
+                                        >
+                                            <Plus size={10} /> {s}
+                                        </button>
+                                    ))}
+                            </div>
+                        </Field>
+
+                        <div className="flex gap-3 mt-2">
+                            <Button type="button" variant="outline" onClick={() => setStep(1)}
+                                className="flex-1 rounded-2xl h-12 font-semibold border-white/10 text-white hover:bg-white/5">← Back</Button>
+                            <Button onClick={handleContinueFromStep2} className="flex-1 rounded-2xl h-12 font-semibold">Continue →</Button>
+                        </div>
+                    </div>
+
                 ) : (
+                    /* ── STEP 3: Account Setup ── */
                     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                         <Field label="Username" error={errors.username}>
                             <input value={username} onChange={e => setUsername(e.target.value.trim())}
@@ -263,7 +402,7 @@ export default function RegisterWorker() {
                             </div>
                         </Field>
                         <div className="flex gap-3 mt-2">
-                            <Button type="button" variant="outline" onClick={() => setStep(1)}
+                            <Button type="button" variant="outline" onClick={() => setStep(2)}
                                 className="flex-1 rounded-2xl h-12 font-semibold border-white/10 text-white hover:bg-white/5">← Back</Button>
                             <Button type="submit" disabled={loading} className="flex-1 rounded-2xl h-12 font-semibold">
                                 {loading ? <><Loader2 size={16} className="animate-spin mr-2" />Creating...</> : "Create Account"}

@@ -1,15 +1,3 @@
-// src/lib/surveyService.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGES:
-//   • addSurveyDocumentWithOCR() — takes base64 image, calls Gemini Vision
-//     to OCR handwritten survey photo into structured data, saves to Firestore
-//   • SurveyDocument now stores extractedData, problemType, location, emergencyLevel
-//   • runFolderAIAnalysis() — reads all docs, uses Gemini to segregate into jobs
-//     with status, urgency chart data, supporting doc count
-//   • fetchSurveyFolderByUniqueId() — for surveyor room entry matching
-//   • SurveyJobSuggestion type for AI analysis output
-// ─────────────────────────────────────────────────────────────────────────────
-
 import {
     collection, addDoc, getDocs, getDoc, updateDoc,
     deleteDoc, doc, query, where, serverTimestamp, type Timestamp,
@@ -18,8 +6,6 @@ import { db } from "./firebase"
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
 const GEMINI_VISION_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SurveyFolder {
     id: string
@@ -36,6 +22,8 @@ export interface SurveyFolder {
 
 export type DocumentStatus = "not started" | "active" | "completed"
 export type EmergencyLevel = "low" | "medium" | "high" | "critical"
+// Added in v2: tracks whether OCR succeeded, failed, or was entered manually
+export type OCRStatus = "ok" | "failed" | "manual"
 
 export interface ExtractedSurveyData {
     location: string
@@ -51,17 +39,17 @@ export interface SurveyDocument {
     id: string
     folderId: string
     name: string
-    fileURL: string           // kept for compatibility, will be empty string
+    fileURL: string           // kept for compatibility, will be empty string when not stored
     fileType: string
     status: DocumentStatus
     priorityRank: number | null
     priorityReason: string | null
     extractedData: ExtractedSurveyData | null   // OCR result
+    ocrStatus?: OCRStatus     // added in v2: indicates OCR outcome
     uploadedAt: Timestamp | null
     uploadedBy?: string       // uid of surveyor
 }
 
-// Job suggestion from AI folder analysis
 export type JobStatus = "ongoing" | "completed" | "not_published" | "not_started"
 
 export interface SurveyJobSuggestion {
@@ -82,8 +70,6 @@ export interface SurveyJobSuggestion {
         duration: string
     }
 }
-
-// ── Gemini helper ─────────────────────────────────────────────────────────────
 
 async function callGeminiVision(prompt: string, base64Image?: string): Promise<string> {
     if (!GEMINI_KEY) throw new Error("VITE_GEMINI_API_KEY not set")
@@ -118,18 +104,15 @@ async function callGeminiVision(prompt: string, base64Image?: string): Promise<s
     return raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 }
 
-// ── OCR Survey Upload ─────────────────────────────────────────────────────────
-// Takes a base64 JPEG of a handwritten survey form.
-// Gemini Vision reads it and returns structured data.
-// Nothing is stored in Firebase Storage — only the structured text is saved.
-
+// v2: added optional fileURL param (defaults to ""); returns ocrStatus in result
 export async function addSurveyDocumentWithOCR(
     folderId: string,
     folderMeta: { state: string; district: string; block: string; wardNo: string },
     base64Image: string,
     uploaderUid: string,
     fileName: string,
-): Promise<{ docId: string; extracted: ExtractedSurveyData }> {
+    fileURL: string = "",     // optional — pass Storage URL if available, otherwise omit
+): Promise<{ docId: string; extracted: ExtractedSurveyData; ocrStatus: OCRStatus }> {
 
     const prompt = `You are an OCR system for an Indian NGO field survey platform.
 The image is a handwritten survey form from a field worker in ${folderMeta.state}, ${folderMeta.district}, Block: ${folderMeta.block}, Ward: ${folderMeta.wardNo}.
@@ -149,6 +132,7 @@ Return ONLY this JSON (no explanation):
 }`
 
     let extracted: ExtractedSurveyData
+    let ocrStatus: OCRStatus = "ok"
 
     try {
         const raw = await callGeminiVision(prompt, base64Image)
@@ -164,6 +148,7 @@ Return ONLY this JSON (no explanation):
         }
     } catch (err) {
         console.error("OCR failed:", err)
+        ocrStatus = "failed"
         // Fallback — save with placeholder data so upload doesn't fail
         extracted = {
             location: `${folderMeta.district}, ${folderMeta.state}`,
@@ -181,18 +166,18 @@ Return ONLY this JSON (no explanation):
         {
             folderId,
             name: fileName,
-            fileURL: "",          // no file stored — text only
+            fileURL,              // v2: stores actual URL if provided, empty string otherwise
             fileType: "image/jpeg",
             status: "not started" as DocumentStatus,
             priorityRank: null,
             priorityReason: null,
             extractedData: extracted,
+            ocrStatus,            // v2: persisted so AI analysis can skip failed docs
             uploadedAt: serverTimestamp(),
             uploadedBy: uploaderUid,
         }
     )
 
-    // Increment documentCount
     const folderRef = doc(db, "surveyFolders", folderId)
     const folderSnap = await getDoc(folderRef)
     if (folderSnap.exists()) {
@@ -201,13 +186,10 @@ Return ONLY this JSON (no explanation):
         })
     }
 
-    return { docId: ref.id, extracted }
+    return { docId: ref.id, extracted, ocrStatus }
 }
 
-// ── AI Folder Analysis ────────────────────────────────────────────────────────
-// Called by NGO Official when pressing "AI Analysis" button on a folder.
-// Reads all survey documents and produces a job suggestion table.
-
+// v2: filters out documents where ocrStatus === "failed" before sending to AI
 export async function runFolderAIAnalysis(
     folderId: string,
     existingJobTitles: string[] = [],   // jobs already published by this NGO
@@ -216,7 +198,11 @@ export async function runFolderAIAnalysis(
     const docsSnap = await getDocs(
         collection(db, "surveyFolders", folderId, "documents")
     )
-    const docs = docsSnap.docs.map(d => d.data())
+
+    // v2: exclude failed OCR docs so they don't corrupt the analysis
+    const docs = docsSnap.docs
+        .map(d => d.data())
+        .filter(d => d.ocrStatus !== "failed")
 
     if (docs.length === 0) throw new Error("No survey documents found in this folder")
 
@@ -280,8 +266,6 @@ Return ONLY a JSON array (no explanation):
     }
 }
 
-// ── Folder CRUD ───────────────────────────────────────────────────────────────
-
 function generateUniqueId(): string {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     let id = "SRV-"
@@ -314,7 +298,6 @@ export async function fetchSurveyFolder(folderId: string): Promise<SurveyFolder 
     return { id: snap.id, ...snap.data() } as SurveyFolder
 }
 
-// For surveyor room entry — match by uniqueId string
 export async function fetchSurveyFolderByUniqueId(uniqueId: string): Promise<SurveyFolder | null> {
     const snap = await getDocs(query(
         collection(db, "surveyFolders"),
@@ -328,8 +311,6 @@ export async function fetchSurveyFolderByUniqueId(uniqueId: string): Promise<Sur
 export async function deleteSurveyFolder(folderId: string): Promise<void> {
     await deleteDoc(doc(db, "surveyFolders", folderId))
 }
-
-// ── Document CRUD ─────────────────────────────────────────────────────────────
 
 export async function fetchSurveyDocuments(folderId: string): Promise<SurveyDocument[]> {
     const snap = await getDocs(collection(db, "surveyFolders", folderId, "documents"))

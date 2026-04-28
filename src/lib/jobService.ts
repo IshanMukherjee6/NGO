@@ -1,10 +1,25 @@
 // src/lib/jobService.ts
+
 import {
-    collection, addDoc, getDocs, getDoc, updateDoc,
-    deleteDoc, doc, query, where, serverTimestamp, type Timestamp,
+    collection,
+    addDoc,
+    getDocs,
+    getDoc,
+    updateDoc,
+    deleteDoc,
+    doc,
+    query,
+    where,
+    serverTimestamp,
+    type Timestamp,
 } from "firebase/firestore"
+
 import { db } from "./firebase"
 import { onWorkerApplied } from "./scoringService"
+
+/* -------------------------------------------------------------------------- */
+/*                                   JOB                                      */
+/* -------------------------------------------------------------------------- */
 
 export interface Job {
     id: string
@@ -24,20 +39,37 @@ export interface Job {
     createdAt: Timestamp | null
 }
 
+/* -------------------------------------------------------------------------- */
+/*                               APPLICATION                                  */
+/* -------------------------------------------------------------------------- */
+
 export interface Application {
     id: string
     jobId: string
     jobTitle: string
     ngoId: string
     ngoName: string
+
     workerId: string
     workerName: string
     workerPhone: string
     workerEmail: string
     workerLocation: string
+
+    // Snapshot of worker qualifications at apply time
+    workerCity?: string
+    workerState?: string
+    workerEducation?: string
+    workerExperience?: string
+    workerSkills?: string[]
+
     status: "pending" | "accepted" | "rejected"
     appliedAt: Timestamp | null
 }
+
+/* -------------------------------------------------------------------------- */
+/*                             PROOF SUBMISSION                               */
+/* -------------------------------------------------------------------------- */
 
 export interface ProofSubmission {
     id: string
@@ -52,92 +84,303 @@ export interface ProofSubmission {
     submittedAt: Timestamp | null
 }
 
+/* -------------------------------------------------------------------------- */
+/*                               FETCH JOBS                                   */
+/* -------------------------------------------------------------------------- */
+
 export async function fetchAllJobs(): Promise<Job[]> {
-    const q = query(collection(db, "jobs"), where("status", "==", "active"))
+    const q = query(
+        collection(db, "jobs"),
+        where("status", "==", "active")
+    )
+
     const snap = await getDocs(q)
-    const jobs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Job))
-    return jobs.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+
+    const jobs = snap.docs.map(
+        (d) => ({ id: d.id, ...d.data() } as Job)
+    )
+
+    return jobs.sort(
+        (a, b) =>
+            (b.createdAt?.toMillis() ?? 0) -
+            (a.createdAt?.toMillis() ?? 0)
+    )
 }
 
-export async function fetchNGOJobs(ngoUid: string): Promise<Job[]> {
-    const q = query(collection(db, "jobs"), where("postedBy", "==", ngoUid))
+export async function fetchNGOJobs(
+    ngoUid: string
+): Promise<Job[]> {
+    const q = query(
+        collection(db, "jobs"),
+        where("postedBy", "==", ngoUid)
+    )
+
     const snap = await getDocs(q)
-    const jobs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Job))
-    return jobs.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+
+    const jobs = snap.docs.map(
+        (d) => ({ id: d.id, ...d.data() } as Job)
+    )
+
+    return jobs.sort(
+        (a, b) =>
+            (b.createdAt?.toMillis() ?? 0) -
+            (a.createdAt?.toMillis() ?? 0)
+    )
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                 ADD JOB                                    */
+/* -------------------------------------------------------------------------- */
 
 export async function addJob(
-    ngoUid: string, ngoName: string,
-    data: { title: string; department: string; positions: number; salary: string; salaryNum: number; duration: string; education: string; experience: string; location: string }
+    ngoUid: string,
+    ngoName: string,
+    data: {
+        title: string
+        department: string
+        positions: number
+        salary: string
+        salaryNum: number
+        duration: string
+        education: string
+        experience: string
+        location: string
+    }
 ): Promise<string> {
     const ref = await addDoc(collection(db, "jobs"), {
-        ...data, filled: 0, status: "active", postedBy: ngoUid, ngoName, createdAt: serverTimestamp(),
+        ...data,
+        filled: 0,
+        status: "active",
+        postedBy: ngoUid,
+        ngoName,
+        createdAt: serverTimestamp(),
     })
+
     return ref.id
 }
 
-export async function updateJob(jobId: string, updates: Partial<Omit<Job, "id" | "postedBy" | "createdAt">>): Promise<void> {
+/* -------------------------------------------------------------------------- */
+/*                               UPDATE JOB                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function updateJob(
+    jobId: string,
+    updates: Partial<
+        Omit<Job, "id" | "postedBy" | "createdAt">
+    >
+): Promise<void> {
     await updateDoc(doc(db, "jobs", jobId), updates)
 }
 
-export async function deleteJob(jobId: string): Promise<void> {
+/* -------------------------------------------------------------------------- */
+/*                               DELETE JOB                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function deleteJob(
+    jobId: string
+): Promise<void> {
     await deleteDoc(doc(db, "jobs", jobId))
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              APPLY FOR JOB                                 */
+/* -------------------------------------------------------------------------- */
+
 export async function applyForJob(
     job: Pick<Job, "id" | "title" | "postedBy" | "ngoName">,
-    worker: { uid: string; fullName: string; phone: string; email: string; location: string }
+    worker: {
+        uid: string
+        fullName: string
+        phone: string
+        email: string
+        location: string
+
+        city?: string
+        state?: string
+        education?: string
+        experience?: string
+        skills?: string[]
+    }
 ): Promise<string> {
-    const ref = await addDoc(collection(db, "applications"), {
-        jobId: job.id, jobTitle: job.title, ngoId: job.postedBy, ngoName: job.ngoName,
-        workerId: worker.uid, workerName: worker.fullName, workerPhone: worker.phone,
-        workerEmail: worker.email || "", workerLocation: worker.location,
-        status: "pending", appliedAt: serverTimestamp(),
-    })
+    const ref = await addDoc(
+        collection(db, "applications"),
+        {
+            jobId: job.id,
+            jobTitle: job.title,
+            ngoId: job.postedBy,
+            ngoName: job.ngoName,
+
+            workerId: worker.uid,
+            workerName: worker.fullName,
+            workerPhone: worker.phone,
+            workerEmail: worker.email || "",
+            workerLocation: worker.location,
+
+            // Qualification Snapshot
+            workerCity: worker.city ?? "",
+            workerState: worker.state ?? "",
+            workerEducation:
+                worker.education ?? "",
+            workerExperience:
+                worker.experience ?? "",
+            workerSkills: worker.skills ?? [],
+
+            status: "pending",
+            appliedAt: serverTimestamp(),
+        }
+    )
+
     onWorkerApplied(ref.id, worker.uid, job.id)
+
     return ref.id
 }
 
-export async function fetchWorkerApplications(workerUid: string): Promise<Application[]> {
-    const q = query(collection(db, "applications"), where("workerId", "==", workerUid))
+/* -------------------------------------------------------------------------- */
+/*                        FETCH WORKER APPLICATIONS                            */
+/* -------------------------------------------------------------------------- */
+
+export async function fetchWorkerApplications(
+    workerUid: string
+): Promise<Application[]> {
+    const q = query(
+        collection(db, "applications"),
+        where("workerId", "==", workerUid)
+    )
+
     const snap = await getDocs(q)
-    const apps = snap.docs.map(d => ({ id: d.id, ...d.data() } as Application))
-    return apps.sort((a, b) => (b.appliedAt?.toMillis() ?? 0) - (a.appliedAt?.toMillis() ?? 0))
+
+    const apps = snap.docs.map(
+        (d) =>
+        ({
+            id: d.id,
+            ...d.data(),
+        } as Application)
+    )
+
+    return apps.sort(
+        (a, b) =>
+            (b.appliedAt?.toMillis() ?? 0) -
+            (a.appliedAt?.toMillis() ?? 0)
+    )
 }
 
-export async function fetchNGOApplications(ngoUid: string): Promise<Application[]> {
-    const q = query(collection(db, "applications"), where("ngoId", "==", ngoUid))
+/* -------------------------------------------------------------------------- */
+/*                         FETCH NGO APPLICATIONS                              */
+/* -------------------------------------------------------------------------- */
+
+export async function fetchNGOApplications(
+    ngoUid: string
+): Promise<Application[]> {
+    const q = query(
+        collection(db, "applications"),
+        where("ngoId", "==", ngoUid)
+    )
+
     const snap = await getDocs(q)
-    const apps = snap.docs.map(d => ({ id: d.id, ...d.data() } as Application))
-    return apps.sort((a, b) => (b.appliedAt?.toMillis() ?? 0) - (a.appliedAt?.toMillis() ?? 0))
+
+    const apps = snap.docs.map(
+        (d) =>
+        ({
+            id: d.id,
+            ...d.data(),
+        } as Application)
+    )
+
+    return apps.sort(
+        (a, b) =>
+            (b.appliedAt?.toMillis() ?? 0) -
+            (a.appliedAt?.toMillis() ?? 0)
+    )
 }
 
-export async function updateApplicationStatus(appId: string, status: "accepted" | "rejected"): Promise<void> {
+/* -------------------------------------------------------------------------- */
+/*                     UPDATE APPLICATION STATUS                              */
+/* -------------------------------------------------------------------------- */
+
+export async function updateApplicationStatus(
+    appId: string,
+    status: "accepted" | "rejected"
+): Promise<void> {
     const appRef = doc(db, "applications", appId)
     const appSnap = await getDoc(appRef)
-    if (!appSnap.exists()) throw new Error("Application not found")
+
+    if (!appSnap.exists()) {
+        throw new Error("Application not found")
+    }
+
     await updateDoc(appRef, { status })
+
     if (status === "accepted") {
-        const jobRef = doc(db, "jobs", appSnap.data().jobId)
+        const jobRef = doc(
+            db,
+            "jobs",
+            appSnap.data().jobId
+        )
+
         const jobSnap = await getDoc(jobRef)
+
         if (jobSnap.exists()) {
-            const filled = (jobSnap.data().filled || 0) + 1
-            const totalPos = jobSnap.data().positions || 1
-            await updateDoc(jobRef, { filled, status: filled >= totalPos ? "closed" : "active" })
+            const filled =
+                (jobSnap.data().filled || 0) + 1
+
+            const totalPos =
+                jobSnap.data().positions || 1
+
+            await updateDoc(jobRef, {
+                filled,
+                status:
+                    filled >= totalPos
+                        ? "closed"
+                        : "active",
+            })
         }
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                             SUBMIT PROOF                                   */
+/* -------------------------------------------------------------------------- */
+
 export async function submitProof(data: {
-    jobId: string; jobTitle: string; workerId: string; workerName: string;
-    ngoId: string; fileURL: string; note: string
+    jobId: string
+    jobTitle: string
+    workerId: string
+    workerName: string
+    ngoId: string
+    fileURL: string
+    note: string
 }): Promise<string> {
-    const ref = await addDoc(collection(db, "proofSubmissions"), { ...data, status: "pending", submittedAt: serverTimestamp() })
+    const ref = await addDoc(
+        collection(db, "proofSubmissions"),
+        {
+            ...data,
+            status: "pending",
+            submittedAt: serverTimestamp(),
+        }
+    )
+
     return ref.id
 }
 
-export async function fetchWorkerProofs(workerUid: string): Promise<ProofSubmission[]> {
-    const q = query(collection(db, "proofSubmissions"), where("workerId", "==", workerUid))
+/* -------------------------------------------------------------------------- */
+/*                           FETCH WORKER PROOFS                              */
+/* -------------------------------------------------------------------------- */
+
+export async function fetchWorkerProofs(
+    workerUid: string
+): Promise<ProofSubmission[]> {
+    const q = query(
+        collection(db, "proofSubmissions"),
+        where("workerId", "==", workerUid)
+    )
+
     const snap = await getDocs(q)
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ProofSubmission))
+
+    return snap.docs.map(
+        (d) =>
+        ({
+            id: d.id,
+            ...d.data(),
+        } as ProofSubmission)
+    )
 }

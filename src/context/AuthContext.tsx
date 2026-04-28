@@ -1,4 +1,5 @@
 // src/context/AuthContext.tsx
+
 import React, {
     createContext,
     useContext,
@@ -6,8 +7,10 @@ import React, {
     useState,
     type ReactNode,
 } from "react"
+
 import { onAuthStateChanged, type User } from "firebase/auth"
 import { auth } from "../lib/firebase"
+
 import {
     getUserProfile,
     loginUser,
@@ -17,77 +20,135 @@ import {
     type UserProfile,
 } from "../lib/authService"
 
-// NGO sub-role stored in memory (not Firestore) — just controls which UI to show
+import { computeWorkerGlobalScore } from "../lib/scoringService"
+
+// NGO sub-role stored in memory (not Firestore)
+// Used only for frontend UI switching
 export type NGOSubRole = "official" | "surveyor" | null
 
 interface AuthContextValue {
     currentUser: User | null
     userProfile: UserProfile | null
     authLoading: boolean
+
     ngoSubRole: NGOSubRole
     setNGOSubRole: (role: NGOSubRole) => void
 
     login: (username: string, password: string) => Promise<UserProfile>
     logout: () => Promise<void>
-    signUpNGO: (data: Parameters<typeof registerNGO>[0]) => Promise<void>
-    signUpWorker: (data: Parameters<typeof registerWorker>[0]) => Promise<void>
+
+    signUpNGO: (
+        data: Parameters<typeof registerNGO>[0]
+    ) => Promise<void>
+
+    signUpWorker: (
+        data: Parameters<typeof registerWorker>[0]
+    ) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({
+    children,
+}: {
+    children: ReactNode
+}) {
     const [currentUser, setCurrentUser] = useState<User | null>(null)
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
     const [authLoading, setAuthLoading] = useState(true)
     const [ngoSubRole, setNGOSubRole] = useState<NGOSubRole>(null)
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            setCurrentUser(user)
-            if (user) {
-                try {
-                    const profile = await getUserProfile(user.uid)
-                    setUserProfile(profile)
-                } catch {
+        const unsubscribe = onAuthStateChanged(
+            auth,
+            async (user) => {
+                setCurrentUser(user)
+
+                if (user) {
+                    try {
+                        const profile = await getUserProfile(user.uid)
+                        setUserProfile(profile)
+                    } catch {
+                        setUserProfile(null)
+                    }
+                } else {
                     setUserProfile(null)
+                    setNGOSubRole(null)
                 }
-            } else {
-                setUserProfile(null)
-                setNGOSubRole(null)
+
+                setAuthLoading(false)
             }
-            setAuthLoading(false)
-        })
+        )
+
         return unsubscribe
     }, [])
 
-    const login = async (username: string, password: string): Promise<UserProfile> => {
+    const login = async (
+        username: string,
+        password: string
+    ): Promise<UserProfile> => {
         const profile = await loginUser(username, password)
+
         setUserProfile(profile)
+
+        // Background recompute of worker score after login
+        if (profile.role === "worker") {
+            computeWorkerGlobalScore(profile.uid).catch((err) => {
+                console.warn(
+                    "Background score recompute failed:",
+                    err
+                )
+            })
+        }
+
         return profile
     }
 
     const logout = async () => {
         await logoutUser()
+
         setCurrentUser(null)
         setUserProfile(null)
         setNGOSubRole(null)
     }
 
-    const signUpNGO = async (data: Parameters<typeof registerNGO>[0]) => {
+    const signUpNGO = async (
+        data: Parameters<typeof registerNGO>[0]
+    ) => {
         await registerNGO(data)
-        const profile = await getUserProfile(auth.currentUser!.uid)
+
+        const profile = await getUserProfile(
+            auth.currentUser!.uid
+        )
+
         setUserProfile(profile)
     }
 
-    const signUpWorker = async (data: Parameters<typeof registerWorker>[0]) => {
+    const signUpWorker = async (
+        data: Parameters<typeof registerWorker>[0]
+    ) => {
         await registerWorker(data)
-        const profile = await getUserProfile(auth.currentUser!.uid)
+
+        const profile = await getUserProfile(
+            auth.currentUser!.uid
+        )
+
         setUserProfile(profile)
     }
 
     return (
         <AuthContext.Provider
-            value={{ currentUser, userProfile, authLoading, ngoSubRole, setNGOSubRole, login, logout, signUpNGO, signUpWorker }}
+            value={{
+                currentUser,
+                userProfile,
+                authLoading,
+                ngoSubRole,
+                setNGOSubRole,
+                login,
+                logout,
+                signUpNGO,
+                signUpWorker,
+            }}
         >
             {children}
         </AuthContext.Provider>
@@ -96,6 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
     const ctx = useContext(AuthContext)
-    if (!ctx) throw new Error("useAuth must be used within AuthProvider")
+
+    if (!ctx) {
+        throw new Error(
+            "useAuth must be used within AuthProvider"
+        )
+    }
+
     return ctx
 }
